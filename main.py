@@ -1,13 +1,11 @@
 from fastapi import FastAPI
 from controllers.user_controller import router as user_router
+from controllers.chat_controller import router as chat_router
 from database import get_database, client
-print("This is a database ")
-print(get_database)
-print("This is client ")
-print(client["Final_Year_Project"])
 
 app = FastAPI()
 app.include_router(user_router)
+app.include_router(chat_router)
 
 @app.on_event("startup")
 async def startup_event():

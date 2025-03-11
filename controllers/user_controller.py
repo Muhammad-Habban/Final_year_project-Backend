@@ -35,8 +35,6 @@ router = APIRouter()
 @router.post('/signup', summary="Create new user", response_model=UserOut)
 async def create_user(data: UserAuth,  user_service: UserService = Depends(get_user_service)):
     user = await user_service.find_user_by_email(email=data.email)
-    print("User : ")
-    print(user)
     if user is not None:
             raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,8 +42,6 @@ async def create_user(data: UserAuth,  user_service: UserService = Depends(get_u
         )
     data.password = get_hashed_password(data.password)
     returned_user = await user_service.create_user(data.dict())
-    print("returned_user : ")
-    print(returned_user)
     fun_ret_user = {
         'email': returned_user['email'],
         'id': returned_user['id']

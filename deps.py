@@ -47,9 +47,6 @@ async def get_current_user(token: str = Depends(reuseable_oauth), user_service: 
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    print("token_data : ")
-    print(token_data)
-    print(token_data.sub)
     user: Union[dict[str, Any], None] = await user_service.find_user_by_email(token_data.sub)
     
     
