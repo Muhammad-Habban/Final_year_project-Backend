@@ -2,10 +2,11 @@ from models.chat import Chat
 from pymongo.collection import Collection
 
 class ChatRepository:
-    def __init__(self, db: Collection):
-        self.db = db
+    def __init__(self, collection):
+        self.collection = collection
 
-    async def create_chat(self, chat: Chat):
-        chat = dict(chat)
-        await self.db.insert_one(chat)
-        return chat
+    async def create_chat(self, chat):
+        await self.collection.insert_one(chat)
+
+    async def update_chat_path(self, chat_id: str, path: str):
+        await self.collection.update_one({"chat_id": chat_id}, {"$set": {"path": path}})

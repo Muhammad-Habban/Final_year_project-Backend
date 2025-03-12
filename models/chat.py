@@ -1,7 +1,10 @@
 from pydantic import BaseModel
 from typing import List
-from .message import Message
 
 class Chat(BaseModel):
     chat_id: str
-    messages: List[dict]  # This could be more detailed based on your requirements
+    user_id: str
+    path: str
+    title: str
+    created_at: str
+    updated_at: str
