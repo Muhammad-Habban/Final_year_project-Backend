@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List
+from .message import Message
 
 class Chat(BaseModel):
     chat_id: str
