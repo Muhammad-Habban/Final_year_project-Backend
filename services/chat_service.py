@@ -14,6 +14,7 @@ class ChatService:
         created_at = datetime.now().isoformat()
         updated_at = created_at
         chat = {"chat_id": chat_id, "user_id": user_id, "title": title, "created_at": created_at, "updated_at": updated_at}
+        
         await self.chat_repository.create_chat(chat)
         return chat
 
