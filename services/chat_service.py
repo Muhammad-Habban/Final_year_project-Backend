@@ -2,7 +2,8 @@ from repositories.chat_repository import ChatRepository
 from uuid import uuid4
 from datetime import datetime
 import os
-# from unstructured.partition.text import partition_text
+from unstructured.partition.text import partition_text
+from unstructured.partition.auto import partition
 import aiofiles
 
 class ChatService:
@@ -24,34 +25,35 @@ class ChatService:
     async def create_chunks(self, chat_id: str, path: str):
         # Use Unstructured to partition the combined text into chunks
         # elements = partition_text(path)
+        elements = partition(path, content_type="application/pdf")
 
-        # # Create chunks with page numbers
-        # chunks = []
-        # current_page_number = 1  # Start with page 1
+        # Create chunks with page numbers
+        chunks = []
+        current_page_number = 1  # Start with page 1
 
-        # for element in elements:
-        #     # Assign the current page number to the chunk
-        #     chunk_data = {
-        #         'type': element.__class__.__name__,
-        #         'text': element.text,
-        #         'page_number': current_page_number  # Assign the page number
-        #     }
-        #     chunks.append(chunk_data)
+        for element in elements:
+            # Assign the current page number to the chunk
+            chunk_data = {
+                'type': element.__class__.__name__,
+                'text': element.text,
+                'page_number': current_page_number  # Assign the page number
+            }
+            chunks.append(chunk_data)
             
-        #     # Update the page number if a page break is detected
-        #     if "page_break" in str(element):  # Check if the element indicates a page break
-        #         current_page_number += 1
+            # Update the page number if a page break is detected
+            if "page_break" in str(element):  # Check if the element indicates a page break
+                current_page_number += 1
 
-        # # Create directory if not exists
-        # chunks_dir = "chunks"
-        # os.makedirs(chunks_dir, exist_ok=True)
+        # Create directory if not exists
+        chunks_dir = "chunks"
+        os.makedirs(chunks_dir, exist_ok=True)
         
-        # # Define file path
-        # file_name = f"{chat_id}.txt"
-        # file_path = os.path.join(chunks_dir, file_name)
+        # Define file path
+        file_name = f"{chat_id}.txt"
+        file_path = os.path.join(chunks_dir, file_name)
         
-        # # Write chunks to file
-        # async with aiofiles.open(file_path, 'w') as file:
-        #     for chunk in chunks:
-        #         await file.write(str(chunk) + "\n")
+        # Write chunks to file
+        async with aiofiles.open(file_path, 'w') as file:
+            for chunk in chunks:
+                await file.write(str(chunk) + "\n")
         pass
