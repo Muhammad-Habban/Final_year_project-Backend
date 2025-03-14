@@ -49,7 +49,7 @@ class ChatService:
         os.makedirs(chunks_dir, exist_ok=True)
         
         # Define file path
-        file_name = f"{chat_id}.txt"
+        file_name = f"{chat_id}.db"
         file_path = os.path.join(chunks_dir, file_name)
         
         # Write chunks to file
