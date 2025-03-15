@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 from unstructured.partition.text import partition_text
 from unstructured.partition.auto import partition
+from sentence_transformers import SentenceTransformer
 import aiofiles
+import json
 
 class ChatService:
     def __init__(self, chat_repository: ChatRepository):
@@ -26,7 +28,8 @@ class ChatService:
         # Use Unstructured to partition the combined text into chunks
         # elements = partition_text(path)
         elements = partition(path, content_type="application/pdf")
-
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        embeddings = []
         # Create chunks with page numbers
         chunks = []
         current_page_number = 1  # Start with page 1
@@ -39,6 +42,8 @@ class ChatService:
                 'page_number': current_page_number  # Assign the page number
             }
             chunks.append(chunk_data)
+            embedding = model.encode(element.text).tolist()
+            embeddings.append(embedding)
             
             # Update the page number if a page break is detected
             if "page_break" in str(element):  # Check if the element indicates a page break
@@ -47,6 +52,7 @@ class ChatService:
         # Create directory if not exists
         chunks_dir = "chunks"
         os.makedirs(chunks_dir, exist_ok=True)
+        os.makedirs("embeddings", exist_ok=True)
         
         # Define file path
         file_name = f"{chat_id}.db"
@@ -56,4 +62,12 @@ class ChatService:
         async with aiofiles.open(file_path, 'w') as file:
             for chunk in chunks:
                 await file.write(str(chunk) + "\n")
-        pass
+
+        # Write embeddings to file
+        embeddings_path = os.path.join("embeddings", f"{chat_id}.db")
+        async with aiofiles.open(embeddings_path, 'w') as file:
+            for embedding in embeddings:
+                await file.write(json.dumps(embedding) + "\n")
+        
+        
+
