@@ -36,3 +36,13 @@ async def upload_pdf(file: UploadFile = File(...), user_id: str = Form(...), cha
         raise HTTPException(status_code=500, detail=str(e))
     
     return {"message": "File uploaded successfully", "chat_id": chat['chat_id']}
+
+@router.get("/all-chats", summary="Get all chats")
+async def get_all_chats(chat_service: ChatService = Depends(get_chat_service)):
+    chats = await chat_service.get_all_chats()
+    return {"chats": chats}
+
+@router.get("/user-chats/{user_id}", summary="Get chats by user ID")
+async def get_user_chats(user_id: str, chat_service: ChatService = Depends(get_chat_service)):
+    chats = await chat_service.get_chats_by_user_id(user_id)
+    return {"chats": chats}

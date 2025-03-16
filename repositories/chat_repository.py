@@ -10,3 +10,15 @@ class ChatRepository:
 
     async def update_chat_path(self, chat_id: str, path: str):
         await self.collection.update_one({"chat_id": chat_id}, {"$set": {"path": path}})
+    
+    async def get_all_chats(self):
+        try:
+            chats = await self.collection.find().to_list(None)
+            return chats
+        except Exception as e:
+            print(e)
+            return None
+
+    async def get_chats_by_user_id(self, user_id: str):
+        chats = await self.collection.find({"user_id": user_id}).to_list(None)
+        return chats

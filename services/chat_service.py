@@ -70,4 +70,14 @@ class ChatService:
                 await file.write(json.dumps(embedding) + "\n")
         
         
+    async def get_all_chats(self):
+        chats = await self.chat_repository.get_all_chats()
+        return [
+            {**chat, "_id": str(chat["_id"])} for chat in chats
+        ]
 
+    async def get_chats_by_user_id(self, user_id: str):
+        chats = await self.chat_repository.get_chats_by_user_id(user_id)
+        return [
+            {**chat, "_id": str(chat["_id"])} for chat in chats
+        ]

@@ -2,6 +2,29 @@ from typing import Union, Any
 from datetime import datetime
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import JSONResponse
+from bson import ObjectId
+import json
+
+class ObjectIDEncoder(json.JSONEncoder):
+    """JSONEncoder subclass that knows how to encode date/time and ObjectId."""
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return json.JSONEncoder.default(self, o)
+
+class CustomJSONResponse(JSONResponse):
+    def render(self, content: any) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            cls=ObjectIDEncoder,
+        ).encode("utf-8")
+
+
 from middleware import (
     ALGORITHM,
     JWT_SECRET_KEY
