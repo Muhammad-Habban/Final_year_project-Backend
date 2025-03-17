@@ -15,3 +15,7 @@ class MessageRepository:
     async def get_messages_by_chat_id(self, chat_id: str):
         messages = self.db.find({"chat_id": chat_id})
         return [msg async for msg in messages]
+    
+    # async def get_all_embeddings(self):
+    #     messages = self.db.find({})
+    #     return [msg async for msg in messages]
