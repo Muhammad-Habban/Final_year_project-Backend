@@ -7,6 +7,7 @@ from unstructured.partition.auto import partition
 from sentence_transformers import SentenceTransformer
 import aiofiles
 import json
+import sqlite3
 
 class ChatService:
     def __init__(self, chat_repository: ChatRepository):
@@ -29,7 +30,7 @@ class ChatService:
         # elements = partition_text(path)
         elements = partition(path, content_type="application/pdf")
         model = SentenceTransformer("all-MiniLM-L6-v2")
-        embeddings = []
+        # embeddings = []
         # Create chunks with page numbers
         chunks = []
         current_page_number = 1  # Start with page 1
@@ -42,8 +43,8 @@ class ChatService:
                 'page_number': current_page_number  # Assign the page number
             }
             chunks.append(chunk_data)
-            embedding = model.encode(element.text).tolist()
-            embeddings.append(embedding)
+            # embedding = model.encode(element.text).tolist()
+            # embeddings.append(embedding)
             
             # Update the page number if a page break is detected
             if "page_break" in str(element):  # Check if the element indicates a page break
@@ -52,22 +53,47 @@ class ChatService:
         # Create directory if not exists
         chunks_dir = "chunks"
         os.makedirs(chunks_dir, exist_ok=True)
-        os.makedirs("embeddings", exist_ok=True)
-        
+        # os.makedirs("embeddings", exist_ok=True)
+        for chunk in chunks:
+            chunk["embedding"] = model.encode(chunk["text"]).tolist()  # Convert numpy array to list for storage
         # Define file path
         file_name = f"{chat_id}.db"
         file_path = os.path.join(chunks_dir, file_name)
-        
-        # Write chunks to file
-        async with aiofiles.open(file_path, 'w') as file:
-            for chunk in chunks:
-                await file.write(str(chunk) + "\n")
+        # Connect to SQLite database (or create one if it doesn't exist)
+        conn = sqlite3.connect(file_path)
+        cursor = conn.cursor()
 
-        # Write embeddings to file
-        embeddings_path = os.path.join("embeddings", f"{chat_id}.db")
-        async with aiofiles.open(embeddings_path, 'w') as file:
-            for embedding in embeddings:
-                await file.write(json.dumps(embedding) + "\n")
+        # Create table to store chunks and embeddings
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            text TEXT,
+            page_number INTEGER,
+            embedding TEXT  -- Store as JSON string
+        )
+        """)
+
+        # Insert chunk data into database
+        for chunk in chunks:
+            cursor.execute("""
+            INSERT INTO chunks (type, text, page_number, embedding) VALUES (?, ?, ?, ?)
+            """, (chunk["type"], chunk["text"], chunk["page_number"], json.dumps(chunk["embedding"])))  # Store embedding as JSON
+
+        # Commit and close
+        conn.commit()
+        conn.close()
+        
+        # # Write chunks to file
+        # async with aiofiles.open(file_path, 'w') as file:
+        #     for chunk in chunks:
+        #         await file.write(str(chunk) + "\n")
+
+        # # Write embeddings to file
+        # embeddings_path = os.path.join("embeddings", f"{chat_id}.db")
+        # async with aiofiles.open(embeddings_path, 'w') as file:
+        #     for embedding in embeddings:
+        #         await file.write(json.dumps(embedding) + "\n")
         
         
     async def get_all_chats(self):
