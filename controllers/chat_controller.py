@@ -12,7 +12,7 @@ def get_chat_service(db=Depends(get_database)):
 
 router = APIRouter()
 
-@router.post("/create-chat", summary="Upload a PDF and create chat")
+@router.post("/create-chat", tags=["chat"], summary="Upload a PDF and create chat")
 async def upload_pdf(file: UploadFile = File(...), user_id: str = Form(...), chat_service: ChatService = Depends(get_chat_service)):
     if file.content_type != 'application/pdf':
         raise HTTPException(status_code=415, detail="Unsupported file type")
@@ -37,12 +37,12 @@ async def upload_pdf(file: UploadFile = File(...), user_id: str = Form(...), cha
     
     return {"message": "File uploaded successfully", "chat_id": chat['chat_id']}
 
-@router.get("/all-chats", summary="Get all chats")
+@router.get("/all-chats",tags=["chat"], summary="Get all chats")
 async def get_all_chats(chat_service: ChatService = Depends(get_chat_service)):
     chats = await chat_service.get_all_chats()
     return {"chats": chats}
 
-@router.get("/user-chats/{user_id}", summary="Get chats by user ID")
+@router.get("/user-chats/{user_id}",tags=["User"], summary="Get chats by user ID")
 async def get_user_chats(user_id: str, chat_service: ChatService = Depends(get_chat_service)):
     chats = await chat_service.get_chats_by_user_id(user_id)
     return {"chats": chats}

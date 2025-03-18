@@ -32,7 +32,7 @@ router = APIRouter()
 
 # app = FastAPI()
 
-@router.post('/signup', summary="Create new user", response_model=UserOut)
+@router.post('/signup', tags=["User"], summary="Create new user", response_model=UserOut)
 async def create_user(data: UserAuth,  user_service: UserService = Depends(get_user_service)):
     user = await user_service.find_user_by_email(email=data.email)
     if user is not None:
@@ -49,7 +49,7 @@ async def create_user(data: UserAuth,  user_service: UserService = Depends(get_u
     return fun_ret_user
 
 
-@router.post('/login', summary="Create access and refresh tokens for user", response_model=TokenSchema)
+@router.post('/login', tags=["User"], summary="Create access and refresh tokens for user", response_model=TokenSchema)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: UserService = Depends(get_user_service)):
     user = await user_service.find_user_by_email(form_data.username)
     if user is None:
@@ -70,6 +70,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), user_service: 
         "refresh_token": create_refresh_token(user['email']),
     }
 
-@router.get('/me', summary='Get details of currently logged in user', response_model=UserOut)
+@router.get('/me', tags=["User"], summary='Get details of currently logged in user', response_model=UserOut)
 async def get_me(user: SystemUser = Depends(get_current_user)):
     return user
