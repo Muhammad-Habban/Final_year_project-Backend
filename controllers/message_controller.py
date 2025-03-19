@@ -11,7 +11,6 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 router = APIRouter()
 
-router = APIRouter()
 
 def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
