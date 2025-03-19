@@ -3,6 +3,13 @@ from repositories.message_repository import MessageRepository
 from services.message_service import MessageService
 from database import get_database
 from models.message import Message
+import openai
+import os
+
+# Load OpenAI API key from environment variables
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+router = APIRouter()
 
 router = APIRouter()
 
@@ -29,3 +36,45 @@ async def get_messages_by_chat_id(
         return messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching messages: {str(e)}")
+
+@router.post("/getresponse", tags=["LLM"], summary="Send user prompt to GPT-3.5-turbo and save response")
+async def get_response(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_id: str = Query(..., description="User ID"),
+    user_prompt: str = Query(..., description="User input prompt for LLM"), 
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        # Send the user prompt to GPT-3.5-turbo via the Chat Completions API
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        # Extract the response text
+        llm_response = response.choices[0].message.content.strip()
+        
+        # Create and save the message with the user prompt and LLM response
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            user_id=user_id,
+            text=user_prompt,
+            response=llm_response
+        )
+        
+        # Return the saved message with the response
+        return message
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
+
+
+
+
+
+
+
+
+
+
