@@ -7,7 +7,7 @@ class Message(BaseModel):
     chat_id: str
     user_id: str
     text: str
-    response: str
+    response: str  
     timestamp: str
 
     @classmethod
