@@ -5,6 +5,7 @@ from database import get_database
 from models.message import Message
 import openai
 import os
+from models.request_body import RequestBody
 
 # Load OpenAI API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -16,8 +17,11 @@ def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
 
 # Route to get all messages in the system
-@router.get("/messages", tags=["messages"], summary="Get all messages", response_model=list[Message])
-async def get_all_messages(message_service: MessageService = Depends(get_message_service)):
+@router.post("/getresponse", tags=["LLM"], summary="Send user prompt to LLM and save response")
+async def get_response(
+    request: RequestBody,  
+    message_service: MessageService = Depends(get_message_service),
+):
     try:
         messages = await message_service.get_all_messages()
         return messages
