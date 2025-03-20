@@ -84,16 +84,6 @@ class ChatService:
         conn.commit()
         conn.close()
         
-        # # Write chunks to file
-        # async with aiofiles.open(file_path, 'w') as file:
-        #     for chunk in chunks:
-        #         await file.write(str(chunk) + "\n")
-
-        # # Write embeddings to file
-        # embeddings_path = os.path.join("embeddings", f"{chat_id}.db")
-        # async with aiofiles.open(embeddings_path, 'w') as file:
-        #     for embedding in embeddings:
-        #         await file.write(json.dumps(embedding) + "\n")
         
         
     async def get_all_chats(self):
