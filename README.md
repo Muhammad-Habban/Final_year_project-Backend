@@ -69,13 +69,10 @@ Book Vision is a backend system designed to handle user interactions with PDF do
 pip install -r requirements.txt
 ```
 
-3.Set Up Environment Variables
-Create a .env file in the root directory and add the following:
+3. Setup Environmental Variables
 
-
-DATABASE_URL=mongodb+srv://fyp_user:mJ9lF2N6axJoYDQt@cluster0.rkahdio.mongodb.net/
-
-4. Running the Application
+   
+5. Running the Application
 Start the backend server:
 
 bash
