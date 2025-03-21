@@ -134,6 +134,7 @@ class ChatService:
         return [
             {**chat, "_id": str(chat["_id"])} for chat in chats
         ]
+        
 
     async def get_chats_by_user_id(self, user_id: str):
         chats = await self.chat_repository.get_chats_by_user_id(user_id)
