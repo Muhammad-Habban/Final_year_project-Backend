@@ -46,7 +46,7 @@ Book Vision is a backend system designed to handle user interactions with PDF do
 - **Similarity Search**:
   - Faiss: Performs efficient cosine similarity search.
 - **LLM Integration**:
-  - A pre-trained language model (e.g., OpenAI GPT, Hugging Face models) for generating responses.
+  - A pre-trained language model (Open ai,Deepseek,LLama) for generating responses.
 
 ---
 
