@@ -57,3 +57,50 @@ Book Vision is a backend system designed to handle user interactions with PDF do
 2. MongoDB installed and running.
 3. SQLite3 installed.
 4. Faiss and Sentence Transformers installed.
+
+
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Muhammad-Habban/Final_year_project-Backend
+
+2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+3.Set Up Environment Variables
+Create a .env file in the root directory and add the following:
+
+
+DATABASE_URL=mongodb+srv://fyp_user:mJ9lF2N6axJoYDQt@cluster0.rkahdio.mongodb.net/
+
+4. Running the Application
+Start the backend server:
+
+bash
+```
+uvicorn main:app --reload
+```
+
+### API Endpoints
+## User Controller
+POST /login: Authenticate a user.
+
+POST /signup: Register a new user.
+
+GET /me: Retrieve information about the logged-in user.
+
+## Chat Controller
+POST /create_chat: Upload a PDF and create a chat session.
+
+GET /all-chat: Retrieve all chats.
+
+GET /user-chats: Retrieve chats for a specific user.
+
+## Message Controller
+GET /messages: Retrieve all messages.
+
+POST /getresponse: Send a prompt and retrieve a response from the LLM.
+
+GET /chat-messages: Retrieve messages for a specific chat.
