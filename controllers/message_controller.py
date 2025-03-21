@@ -19,25 +19,6 @@ def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
 
 
-@router.post("/convert_audio", tags=["LLM"], summary="Convert MP3 audio file to text using Whisper")
-async def convert_audio_to_text(file: UploadFile = File(...)):
-    """Receive an MP3 file, convert it to text using Whisper."""
-    try:
-        # Convert the uploaded MP3 to WAV
-        wav_audio = convert_mp3_to_wav(file)
-
-        # Read the WAV data and transcribe using Whisper
-        audio_data = np.frombuffer(wav_audio.read(), dtype=np.float32)
-
-        # Perform speech-to-text using Whisper
-        transcription = whisper_pipeline({"sampling_rate": SAMPLE_RATE, "raw": audio_data}, generate_kwargs={"language": "en"})['text']
-
-        # Return the transcription result
-        return {"transcription": transcription}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing audio file: {str(e)}")
-    
 
 # Route to get messages by chat_id
 @router.get("/messages/{chat_id}", tags=["messages"], summary="Get messages by chat ID", response_model=list[Message])
