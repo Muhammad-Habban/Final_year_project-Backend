@@ -46,3 +46,32 @@ async def get_all_chats(chat_service: ChatService = Depends(get_chat_service)):
 async def get_user_chats(user_id: str, chat_service: ChatService = Depends(get_chat_service)):
     chats = await chat_service.get_chats_by_user_id(user_id)
     return {"chats": chats}
+
+@router.put("/edit-chat/{chat_id}", tags=["chat"], summary="Edit chat details")
+async def edit_chat(chat_id: str, title: Optional[str] = None, chat_service: ChatService = Depends(get_chat_service)):
+    chat = await chat_service.get_chat_by_id(chat_id)
+    
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Update the fields that are provided
+    updated_chat = {}
+    if title:
+        updated_chat["title"] = title
+
+    if updated_chat:
+        await chat_service.update_chat(chat_id, updated_chat)
+        return {"message": "Chat updated successfully", "chat_id": chat_id}
+    else:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+
+@router.delete("/delete-chat/{chat_id}", tags=["chat"], summary="Delete a chat")
+async def delete_chat(chat_id: str, chat_service: ChatService = Depends(get_chat_service)):
+    chat = await chat_service.get_chat_by_id(chat_id)
+    
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    await chat_service.delete_chat(chat_id)
+    return {"message": "Chat deleted successfully", "chat_id": chat_id}

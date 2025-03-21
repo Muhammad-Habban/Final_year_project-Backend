@@ -8,6 +8,8 @@ from sentence_transformers import SentenceTransformer
 import aiofiles
 import json
 import sqlite3
+import faiss
+import numpy as np
 
 class ChatService:
     def __init__(self, chat_repository: ChatRepository):
@@ -83,7 +85,48 @@ class ChatService:
         # Commit and close
         conn.commit()
         conn.close()
-        
+
+        embedding_list = []
+
+        ids = []
+
+        connection = sqlite3.connect(file_path)  # Reopen the connection if it was closed
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT id, embedding FROM chunks")
+        rows = cursor.fetchall()
+
+        for row in rows:
+            chunk_id = row[0]
+            embedding = json.loads(row[1])  # Convert JSON string back to a list
+            embedding_list.append(embedding)
+            ids.append(chunk_id)
+
+        # Convert to numpy arrays
+        embedding_array = np.array(embedding_list, dtype=np.float32)
+        ids_array = np.array(ids, dtype=np.int64)  # Store actual chunk IDs
+
+        # Normalize embeddings before indexing
+        faiss.normalize_L2(embedding_array)  # Normalize the embeddings
+        # Initialize FAISS index
+        embedding_dimension = embedding_array.shape[1]
+        index = faiss.IndexFlatIP(embedding_dimension)
+
+        # Create ID-based FAISS index
+        index_with_ids = faiss.IndexIDMap(index)
+        index_with_ids.add_with_ids(embedding_array, ids_array)  # Store IDs inside FAISS
+
+        faiss_dir = "faiss"
+        os.makedirs(faiss_dir, exist_ok=True)
+
+        # Define file path
+        faiss_file_name = f"{chat_id}.bin"
+        faiss_file_path = os.path.join(faiss_dir, faiss_file_name)
+
+        # Save FAISS index
+        faiss.write_index(index_with_ids, f"{faiss_file_path}")
+
+        index = faiss.read_index(f"{faiss_file_path}")
         
         
     async def get_all_chats(self):
@@ -97,3 +140,13 @@ class ChatService:
         return [
             {**chat, "_id": str(chat["_id"])} for chat in chats
         ]
+
+    async def get_chat_by_id(self, chat_id: str):
+        chat = await self.chat_repository.get_chat_by_id(chat_id)
+        return chat
+
+    async def update_chat(self, chat_id: str, updated_fields: dict):
+        await self.chat_repository.update_chat(chat_id, updated_fields)
+
+    async def delete_chat(self, chat_id: str):
+        await self.chat_repository.delete_chat(chat_id)

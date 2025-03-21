@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # List of origins allowed for CORS
 origins = [
-    "http://localhost:3000",  # You can add other domains as needed
+    "http://localhost:3000",
 ]
 
 # Initialize FastAPI app
