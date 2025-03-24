@@ -36,7 +36,6 @@ async def get_messages_by_chat_id(
 @router.post("/getresponse", tags=["LLM"], summary="Send user prompt to GPT-4 and save response")
 async def get_response(
     chat_id: str = Query(..., description="Chat session ID"),
-    user_id: str = Query(..., description="User ID"),
     user_prompt: str = Query(..., description="User input prompt for LLM"),
     message_service: MessageService = Depends(get_message_service),
 ):
@@ -59,7 +58,6 @@ async def get_response(
         # Create and save the message with the user prompt and LLM response
         message = await message_service.create_message(
             chat_id=chat_id,
-            user_id=user_id,
             text=user_prompt,
             response=llm_response
         )

@@ -14,8 +14,8 @@ class MessageService:
         self.message_repository = message_repository
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    async def create_message(self, chat_id: str, user_id: str, text: str, response: str):
-        return await self.message_repository.create_message(chat_id, user_id, text, response)
+    async def create_message(self, chat_id: str,text: str, response: str):
+        return await self.message_repository.create_message(chat_id, text, response)
     
     async def get_messages_by_chat_id(self, chat_id: str):
         return await self.message_repository.get_messages_by_chat_id(chat_id)
