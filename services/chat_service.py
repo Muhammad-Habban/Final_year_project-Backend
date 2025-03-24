@@ -43,15 +43,10 @@ class ChatService:
             chunk_data = {
                 'type': element.__class__.__name__,
                 'text': element.text,
-                'page_number': current_page_number  # Assign the page number
+                'page_number': element.metadata.to_dict().get("page_number", "Unknown") 
             }
             chunks.append(chunk_data)
-            # embedding = model.encode(element.text).tolist()
-            # embeddings.append(embedding)
-            
-            # Update the page number if a page break is detected
-            if "page_break" in str(element):  # Check if the element indicates a page break
-                current_page_number += 1
+
 
         # Create directory if not exists
         chunks_dir = "chunks"
