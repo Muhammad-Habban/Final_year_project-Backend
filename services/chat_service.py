@@ -2,8 +2,8 @@ from repositories.chat_repository import ChatRepository
 from uuid import uuid4
 from datetime import datetime
 import os
-from unstructured.partition.text import partition_text
 from unstructured.partition.auto import partition
+from unstructured.partition.pdf import partition_pdf
 from sentence_transformers import SentenceTransformer
 import aiofiles
 import json
@@ -30,6 +30,7 @@ class ChatService:
     async def create_chunks(self, chat_id: str, path: str):
         # Use Unstructured to partition the combined text into chunks
         # elements = partition_text(path)
+        # elements = partition_pdf(path, strategy="hi_res")
         elements = partition(path, content_type="application/pdf")
         model = SentenceTransformer("all-MiniLM-L6-v2")
         # embeddings = []

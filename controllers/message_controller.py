@@ -84,6 +84,8 @@ async def test_chunks(
 
         # Prepare the chunks for the prompt (you can adjust how many chunks you want to include)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])  # Combine the top chunks
+        
+        print("Combined Chunks:", combined_chunks)
 
         # Concatenate the user prompt with the relevant chunks
         full_prompt = combined_chunks + "\n" + user_prompt
