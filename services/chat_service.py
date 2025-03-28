@@ -36,7 +36,6 @@ class ChatService:
         # embeddings = []
         # Create chunks with page numbers
         chunks = []
-        current_page_number = 1  # Start with page 1
 
         for element in elements:
             # Assign the current page number to the chunk

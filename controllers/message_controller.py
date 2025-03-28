@@ -10,6 +10,7 @@ import torch
 import numpy as np
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from transformers import pipeline
+from ollama import chat 
 
 # Load OpenAI API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -105,7 +106,6 @@ async def test_chunks(
         # Create and save the message with the user prompt and LLM response
         message = await message_service.create_message(
             chat_id=chat_id,
-            user_id="user_id_placeholder",  # Replace with actual user ID if available
             text=user_prompt,
             response=llm_response
         )
@@ -115,3 +115,108 @@ async def test_chunks(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing chunks and generating response: {str(e)}")
+
+
+# Getting response from DeepSeek
+@router.post("/deepseek_response", tags=["LLM"], summary="Send user prompt to Deepseek model and save response")
+async def get_deepseek_response(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_prompt: str = Query(..., description="User input prompt for Deepseek model"),
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        response = chat(model='deepseek-r1:8b', messages=[{'role': 'user', 'content': user_prompt}])
+        deepseek_response = response.message.content.strip()
+
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            text=user_prompt,
+            response=deepseek_response
+        )
+
+        return message
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating Deepseek response: {str(e)}")
+    
+    
+    
+
+# Endpoint for getting a structured response from Deepseek model
+@router.post("/deepseek_response-stru", tags=["LLM"], summary="Send user prompt to Deepseek model and save response")
+async def get_deepseek_response(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_prompt: str = Query(..., description="User input prompt for Deepseek model"),
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        # Send the user prompt to Deepseek model via the ollama API
+        response = chat(model='deepseek-r1:8b', messages=[{'role': 'user', 'content': user_prompt}])
+
+        # Extract content from the response
+        deepseek_response = response.message.content.strip()
+
+        # Structure the response in a more readable format
+        structured_response = {
+            "chat_id": chat_id,
+            "user_prompt": user_prompt,
+            "deepseek_response": deepseek_response,
+            "model": "deepseek-r1:8b",
+            "response_length": len(deepseek_response),
+        }
+
+        # Create and save the message with the user prompt and Deepseek response
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            text=user_prompt,
+            response=deepseek_response
+        )
+
+        # Return the structured response
+        return structured_response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating Deepseek response: {str(e)}")
+    
+    
+# Endpoint for feeding chunks to Deepseek LLM and getting response
+@router.post("/test_chunks_deepseek", tags=["LLM"], summary="Perform hybrid search and send result to Deepseek")
+async def test_chunks_deepseek(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_prompt: str = Query(..., description="User input prompt for Deepseek"),
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        # Perform hybrid search to retrieve relevant chunks using the hybrid_search method
+        faiss_results = message_service.hybrid_search(query=user_prompt, chat_id=chat_id, top_k=5, min_words=5)
+
+        # Prepare the chunks for the prompt (you can adjust how many chunks you want to include)
+        combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])  # Combine the top chunks
+        
+        print("Combined Chunks:", combined_chunks)
+
+        # Concatenate the user prompt with the relevant chunks
+        full_prompt = combined_chunks + "\n" + user_prompt
+
+        # Send the full prompt to Deepseek via the ollama API
+        response = chat(model='deepseek-r1:8b', messages=[{'role': 'user', 'content': full_prompt}])
+
+        # Extract the response text from Deepseek
+        deepseek_response = response.message.content.strip()
+        
+        # Remove thinking text if any
+        if deepseek_response.startswith("<think>"):
+            deepseek_response = deepseek_response.split("</think>")[-1].strip()
+
+        # Create and save the message with the user prompt and Deepseek response
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            text=user_prompt,
+            response=deepseek_response
+        )
+
+        # Return the saved message with the response
+        return message
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing chunks and generating Deepseek response: {str(e)}")

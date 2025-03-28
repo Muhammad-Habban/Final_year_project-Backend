@@ -10,7 +10,7 @@ class Message(BaseModel):
     timestamp: str
 
     @classmethod
-    def create(cls, chat_id: str text: str, response: str):
+    def create(cls, chat_id: str,text: str, response: str):
         return cls(
             id=str(uuid4()),
             chat_id=chat_id,
