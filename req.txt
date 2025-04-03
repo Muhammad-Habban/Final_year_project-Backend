@@ -403,53 +403,25 @@ timm==1.0.14
 tinycss2 @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/tinycss2_1699545185754/work
 tldextract @ file:///C:/b/abs_34gknp7o18/croot/tldextract_1723064394448/work
 tokenizers==0.21.0
-toml @ file:///tmp/build/80754af9/toml_1616166611790/work
-tomli @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/tomli_1699472528897/work
-tomlkit @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/tomlkit_1699475633229/work
-toolz @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/toolz_1699474617784/work
 torch==2.6.0
 torchvision==0.21.0
 tornado==6.4.2
 tqdm==4.67.1
-traitlets @ file:///C:/b/abs_bfsnoxl4pq/croot/traitlets_1718227069245/work
 transformers==4.48.2
-truststore @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/truststore_1701881385424/work
-Twisted @ file:///C:/b/abs_e7yqd811in/croot/twisted_1708702883769/work
-twisted-iocpsupport @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/twisted-iocpsupport_1699496891011/work
 typer==0.15.1
 typing==3.7.4.3
 typing-inspect==0.9.0
 typing_extensions==4.12.2
 tzdata==2025.1
-uc-micro-py @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/uc-micro-py_1699545612984/work
-ujson @ file:///C:/b/abs_c93a278xy4/croot/ujson_1717598062082/work
-unicodedata2 @ file:///C:/b/abs_b6apldlg7y/croot/unicodedata2_1713212998255/work
-Unidecode @ file:///C:/b/abs_4cczv71djp/croot/unidecode_1724790062151/work
 unstructured==0.16.25
 unstructured-client==0.29.0
 unstructured-inference==0.8.7
 unstructured.pytesseract==0.3.13
 urllib3==2.3.0
 uvicorn==0.34.0
-w3lib @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/w3lib_1709162573908/work
-watchdog @ file:///C:/b/abs_b3l_3s276z/croot/watchdog_1717166538403/work
 watchfiles==1.0.3
 wcwidth==0.2.13
-webencodings @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/webencodings_1699497069416/work
-websocket-client @ file:///C:/b/abs_5dmnxxoci9/croot/websocket-client_1715878351319/work
 websockets==14.1
-Werkzeug @ file:///C:/b/abs_8bittcw9jr/croot/werkzeug_1716533366070/work
-whatthepatch @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/whatthepatch_1699497134590/work
 wheel==0.44.0
-widgetsnbextension @ file:///C:/b/abs_538o2crz7f/croot/widgetsnbextension_1710960099872/work
-win-inet-pton @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/win_inet_pton_1699472992992/work
 wrapt==1.17.2
-xarray @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/xarray_1699480274069/work
-xlwings @ file:///C:/b/abs_bc7ro1xk70/croot/xlwings_1725400109105/work
-xyzservices @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/xyzservices_1699548906163/work
-yapf @ file:///C:/b/abs_8aidayep18/croot/yapf_1708964372649/work
-yarl @ file:///C:/b/abs_00rcuicx5k/croot/yarl_1726015884215/work
-zict @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/zict_1699548979005/work
-zipp @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/zipp_1707493775475/work
-zope.interface @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/zope.interface_1699497164709/work
-zstandard @ file:///C:/b/abs_82dff2ths3/croot/zstandard_1728569207191/work
+
