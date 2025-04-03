@@ -80,6 +80,7 @@ defusedxml @ file:///tmp/build/80754af9/defusedxml_1615228127516/work
 Deprecated==1.2.18
 diff-match-patch @ file:///Users/ktietz/demo/mc3/conda-bld/diff-match-patch_1630511840874/work
 dill @ file:///C:/b/abs_f79eg27d2q/croot/dill_1715094735295/work
+diskcache==5.6.3
 distributed @ file:///C:/b/abs_52ju83vjqr/croot/distributed_1725523030746/work
 distro @ file:///C:/b/abs_71xr36ua5r/croot/distro_1714488282676/work
 dnspython==2.7.0
@@ -118,6 +119,7 @@ grpcio-status==1.70.0
 h11 @ file:///C:/b/abs_1czwoyexjf/croot/h11_1706652332846/work
 h5py @ file:///C:/b/abs_c4ha_1xv14/croot/h5py_1715094776210/work
 HeapDict @ file:///Users/ktietz/demo/mc3/conda-bld/heapdict_1630598515714/work
+hf_transfer==0.1.9
 holoviews @ file:///C:/b/abs_5f962ukrbq/croot/holoviews_1720534381286/work
 html5lib==1.1
 httpcore==1.0.7
@@ -180,6 +182,7 @@ lckr_jupyterlab_variableinspector @ file:///C:/Users/dev-admin/perseverance-pyth
 libarchive-c @ file:///croot/python-libarchive-c_1726069797193/work
 libmambapy @ file:///C:/b/abs_aam1usey89/croot/mamba-split_1725563515831/work/libmambapy
 linkify-it-py @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/linkify-it-py_1699558957411/work
+llama_cpp_python==0.3.8
 llvmlite @ file:///C:/b/abs_80rinyr2fr/croot/llvmlite_1720455223586/work
 lmdb @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/python-lmdb_1699495888630/work
 locket @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/locket_1699476508014/work
@@ -221,6 +224,7 @@ numexpr @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/numexpr_
 numpy @ file:///C:/b/abs_c1ywpu18ar/croot/numpy_and_numpy_base_1708638681471/work/dist/numpy-1.26.4-cp312-cp312-win_amd64.whl#sha256=becc06674317799ad0165a939a7613809d0bee9bd328a1e4308c57c39cacf08c
 numpydoc @ file:///C:/b/abs_bbspp5l8vu/croot/numpydoc_1718279185573/work
 olefile==0.47
+ollama==0.4.7
 omegaconf==2.3.0
 onnx==1.17.0
 onnxruntime==1.20.1
@@ -356,6 +360,7 @@ seaborn @ file:///C:/b/abs_ca2mi1rgmn/croot/seaborn_1718303534355/work
 semver @ file:///C:/b/abs_4bkbn3v6jp/croot/semver_1709243682483/work
 Send2Trash @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/send2trash_1701806400767/work
 sentence-transformers==3.4.1
+sentencepiece==0.2.0
 service-identity @ file:///Users/ktietz/demo/mc3/conda-bld/service_identity_1629460757137/work
 setuptools==75.1.0
 shellingham==1.5.4

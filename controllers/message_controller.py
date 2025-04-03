@@ -8,13 +8,19 @@ from models.message import Message
 import os
 import torch
 import numpy as np
-from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi import File, UploadFile
 from transformers import pipeline
 from ollama import chat 
-
+import json
+import re
+from llama_cpp import Llama
 # Load OpenAI API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
 router = APIRouter()
+
+# Load GGUF quantized model
+model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
+llm = Llama(model_path=model_path, n_ctx=2048, verbose=False)
 
 def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
@@ -220,3 +226,51 @@ async def test_chunks_deepseek(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing chunks and generating Deepseek response: {str(e)}")
+
+
+@router.post("/generate-quiz", tags=["LLM"], summary="Generate quiz from text")
+async def generate_quiz(user_prompt: str = Query(..., description="Text input to generate quiz from")):
+    prompt = f"""
+    Given the following text, create exactly 5 multiple-choice quiz questions.
+
+    Strictly return ONLY JSON. Do NOT include any explanation, comments, or additional text outside the JSON.
+
+    JSON format example:
+    {{
+      "questions": [
+        {{
+          "description": "Question text?",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "answer": "Correct Option"
+        }}
+      ]
+    }}
+
+    Text to use:
+    {user_prompt}
+
+    JSON:
+    """
+
+    try:
+        output = llm(
+            prompt,
+            max_tokens=1000,
+            temperature=0.5,
+            stop=["\n\n"]
+        )
+        response_text = output["choices"][0]["text"].strip()
+
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if not json_match:
+            raise ValueError("No JSON found in the LLM response.")
+
+        json_content = json_match.group(0)
+
+        quiz_json = json.loads(json_content)
+        return quiz_json
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON returned by LLM. Error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
