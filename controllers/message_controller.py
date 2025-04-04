@@ -1,31 +1,53 @@
 import openai
-import os
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
 from repositories.message_repository import MessageRepository
 from services.message_service import MessageService
 from database import get_database
 from models.message import Message
 import os
-import torch
 import numpy as np
-from fastapi import File, UploadFile
 from transformers import pipeline
-from ollama import chat 
+from ollama import chat
 import json
 import re
 from llama_cpp import Llama
+import soundfile as sf
+# from io import BytesIO
+import tempfile
+from pydub import AudioSegment
+import torch
+
 # Load OpenAI API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
 router = APIRouter()
 
 # Load GGUF quantized model
-model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
-llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
+
+# model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
+# llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+whisper_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small", device=device)
+SAMPLE_RATE = 16000
 
 def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
 
+# Convert MP3 to WAV (needed for the whisper model)
+def mp3_to_wav(mp3_file):
+    audio = AudioSegment.from_mp3(mp3_file)
+    audio = audio.set_channels(1)  # Convert to mono (1 channel)
+    wav_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+    audio.export(wav_file.name, format="wav")
+    return wav_file.name
 
+# Function to process audio and return transcription
+def transcribe_audio(audio_file):
+    wav_path = mp3_to_wav(audio_file)
+    audio, samplerate = sf.read(wav_path)
+    audio = np.squeeze(audio)
+
+    transcription = whisper_pipeline({"sampling_rate": SAMPLE_RATE, "raw": audio},generate_kwargs={"language": "en", "return_timestamps": True})
+    return transcription
 
 # Route to get messages by chat_id
 @router.get("/messages/{chat_id}", tags=["messages"], summary="Get messages by chat ID", response_model=list[Message])
@@ -232,7 +254,27 @@ async def simple_answer(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating simple answer: {str(e)}")
 
+@router.post("/transcribe", tags=["LLM"], summary="Transcribe audio file")
+async def transcribe( chat_id: str = Query(..., description="Chat session ID"), file: UploadFile = File(...)):
+    try:
+        # Transcribe the audio file
+        transcription = transcribe_audio(file.file)
+        
+        return {"chat_id": chat_id, "transcription": transcription}
 
+    except Exception as e:
+        return {"error": str(e)}
+    
+@router.post("/voice-message", tags=["LLM"], summary="Input a text file")
+async def transcribe( chat_id: str = Query(..., description="Chat session ID"), file: UploadFile = File(...)):
+    try:
+        # Transcribe the audio file
+        transcription = transcribe_audio(file.file)
+        result = await test_chunks(chat_id=chat_id, user_prompt=transcription)
+        return {"chat_id": chat_id, "transcription": transcription, "result": result}
+
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.post("/generate-quiz", tags=["LLM"], summary="Generate quiz from text")
 async def generate_quiz(user_prompt: str = Query(..., description="Text input to generate quiz from")):
