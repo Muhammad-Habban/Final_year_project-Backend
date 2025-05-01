@@ -23,8 +23,8 @@ router = APIRouter()
 
 # Load GGUF quantized model
 
-# model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
-# llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
+model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
+llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-small", device=device)
 SAMPLE_RATE = 16000
