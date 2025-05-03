@@ -10,6 +10,7 @@ import json
 import sqlite3
 import faiss
 import numpy as np
+import re
 
 class ChatService:
     def __init__(self, chat_repository: ChatRepository):
@@ -30,23 +31,46 @@ class ChatService:
     async def create_chunks(self, chat_id: str, path: str):
         # Use Unstructured to partition the combined text into chunks
         # elements = partition_text(path)
-        # elements = partition_pdf(path, strategy="hi_res")
-        elements = partition(path, content_type="application/pdf")
+        elements = partition_pdf(path, strategy="hi_res")
+        # elements = partition(path, content_type="application/pdf")
         model = SentenceTransformer("all-MiniLM-L6-v2")
         # embeddings = []
         # Create chunks with page numbers
         chunks = []
+        current_chapter = "Unknown"
+        current_section = "Unknown"
+        
+        
+        for i, element in enumerate(elements):
+            text = element.text.strip()
+            metadata = element.metadata.to_dict() if element.metadata else {}
+            page_number = metadata.get("page_number", "Unknown")
+            
+            # 🔹 Detect chapter headings
+            match_chapter = re.search(r'\b(?:Chapter|CHAPTER|Ch\.|CHAP|Unit|Lesson)\s*(\d+)', text, re.IGNORECASE)
+            if match_chapter:
+                current_chapter = f"Chapter {match_chapter.group(1)}"
 
-        for element in elements:
-            # Assign the current page number to the chunk
+            # 🔹 Detect section numbers (e.g., "1.1 Introduction")
+            match_section = re.search(r'\b(\d+\.\d+)\s+([A-Za-z ]+)', text)
+            if match_section:
+                current_section = f"Section {match_section.group(1)}: {match_section.group(2)}"
+
+            # 🔹 Merge small chunks
+            if len(text.split()) < 30 and i > 0 and element.__class__.__name__ == "NarrativeText":
+                chunks[-1]['text'] += " " + text
+                continue  # Skip adding this as a separate chunk
+
+            # 🔹 Create chunk
             chunk_data = {
                 'type': element.__class__.__name__,
-                'text': element.text,
-                'page_number': element.metadata.to_dict().get("page_number", "Unknown") 
+                'text': text,
+                'page_number': page_number,
+                'chapter_number': current_chapter,
+                'section_number': current_section
             }
             chunks.append(chunk_data)
-
-
+        
         # Create directory if not exists
         chunks_dir = "chunks"
         os.makedirs(chunks_dir, exist_ok=True)
@@ -67,15 +91,26 @@ class ChatService:
             type TEXT,
             text TEXT,
             page_number INTEGER,
+            chapter_number TEXT,
+            section_number TEXT,
             embedding TEXT  -- Store as JSON string
         )
-        """)
+    """)
+
 
         # Insert chunk data into database
         for chunk in chunks:
             cursor.execute("""
-            INSERT INTO chunks (type, text, page_number, embedding) VALUES (?, ?, ?, ?)
-            """, (chunk["type"], chunk["text"], chunk["page_number"], json.dumps(chunk["embedding"])))  # Store embedding as JSON
+                INSERT INTO chunks (type, text, page_number, chapter_number, section_number, embedding)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                chunk["type"],
+                chunk["text"],
+                chunk["page_number"],
+                chunk["chapter_number"],
+                chunk["section_number"],
+                json.dumps(chunk["embedding"])  # Convert list to JSON string
+            ))
 
         # Commit and close
         conn.commit()
