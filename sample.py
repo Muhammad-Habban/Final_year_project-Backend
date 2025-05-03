@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Ollama configuration
+# Ollama configuration
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 # MODEL_NAME = "deepseek-r1:8b-llama-distill-q8_0"
 # MODEL_NAME = "deepseek-r1:1.5b-qwen-distill-q8_0"

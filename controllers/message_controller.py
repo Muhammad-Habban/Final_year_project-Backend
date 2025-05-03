@@ -81,7 +81,6 @@ async def get_messages_by_chat_id(
         raise HTTPException(status_code=500, detail=f"Error fetching messages: {str(e)}")
 
 
-
 #____________________________________________________________________________________    
 @router.post("/open_ai_response", tags=["LLM"], summary="Send user prompt to GPT-4 and get response")
 async def get_response(
