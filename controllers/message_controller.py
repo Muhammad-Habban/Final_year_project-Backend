@@ -375,7 +375,7 @@ async def generate_quiz(user_prompt: str = Query(..., description="Text input to
   
   
 #____________________________________________________________________________________        
-@router.get("/search-with-images", tags=["Web Search"], summary="3 web results + 2 images each")
+@router.post("/search-with-images", tags=["Web Search"], summary="3 web results + 2 images each")
 def search_with_images(query: str = Query(..., description="Search query")):
     if not API_KEY or not CSE_ID:
         raise HTTPException(status_code=500, detail="API key or CSE ID not set.")
