@@ -129,7 +129,7 @@ async def test_chunks(
 ):
     try:
         # Perform hybrid search to retrieve relevant chunks using the hybrid_search method
-        faiss_results = message_service.hybrid_search(query=user_prompt,chat_id=chat_id, top_k=5, min_words=5)
+        faiss_results = message_service.hybrid_search(query=user_prompt,chat_id=chat_id, top_k=5)
 
         # Prepare the chunks for the prompt (you can adjust how many chunks you want to include)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])  # Combine the top chunks
@@ -203,7 +203,7 @@ async def test_chunks_deepseek(
 ):
     try:
         # Perform hybrid search to retrieve relevant chunks using the hybrid_search method
-        faiss_results = message_service.hybrid_search(query=user_prompt, chat_id=chat_id, top_k=5, min_words=5)
+        faiss_results = message_service.hybrid_search(query=user_prompt, chat_id=chat_id, top_k=5)
 
         # Prepare the chunks for the prompt (you can adjust how many chunks you want to include)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])  # Combine the top chunks
