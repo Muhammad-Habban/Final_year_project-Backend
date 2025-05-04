@@ -302,34 +302,6 @@ You are a highly knowledgeable physics expert. Your task is to generate a clear,
         )
         
 
-#____________________________________________________________________________________         
-@router.post("/transcribe", tags=["LLM"], summary="Transcribe audio file")
-async def transcribe( chat_id: str = Query(..., description="Chat session ID"), file: UploadFile = File(...)):
-    try:
-        # Transcribe the audio file
-        transcription = transcribe_audio(file.file)
-        
-        return {"chat_id": chat_id, "transcription": transcription}
-
-    except Exception as e:
-        return {"error": str(e)}
-
-    
-    
-#____________________________________________________________________________________    
-@router.post("/voice-message", tags=["LLM"], summary="Input a text file")
-async def transcribe( chat_id: str = Query(..., description="Chat session ID"), file: UploadFile = File(...)):
-    try:
-        # Transcribe the audio file
-        transcription = transcribe_audio(file.file)
-        result = await test_chunks(chat_id=chat_id, user_prompt=transcription)
-        return {"chat_id": chat_id, "transcription": transcription, "result": result}
-
-    except Exception as e:
-        return {"error": str(e)}
-
-
-
 #____________________________________________________________________________________    
 quiz_prompt = PromptTemplate.from_template("""
 Given the following text, create exactly 5 multiple-choice quiz questions.
