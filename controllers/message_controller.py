@@ -27,13 +27,13 @@ CSE_ID = os.getenv("GOOGLE_CSE_ID")
 router = APIRouter()
 
 # Load GGUF quantized model
-
-model_path = "E:\\deepseek-llm-7b-chat.Q4_K_M.gguf"
-llm = LlamaCpp(
+model_path = "D:/FYP/deepseek-llm-7b-chat.Q4_K_M.gguf"
+llm = Llama(
     model_path=model_path,
     n_ctx=4096,
-    max_tokens=1000,
-    temperature=0.7
+    n_batch=512,
+    use_mmap=True,
+    verbose=False
 )
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -239,8 +239,8 @@ async def test_chunks_deepseek(
 
 
 #____________________________________________________________________________________    
-@router.post("/deepseek_q_response", tags=["LLM"], summary="Get response from quantized Deepseek model")
-async def simple_answer(
+@router.post("/deepseek_q_response", tags=["LLM"], summary="Get detailed physics response from quantized Deepseek model")
+async def get_detailed_answer(
     chat_id: str = Query(..., description="Chat session ID"),
     user_prompt: str = Query(..., description="User input prompt for the LLM"),
     message_service: MessageService = Depends(get_message_service),
@@ -252,78 +252,119 @@ async def simple_answer(
             chat_id=chat_id,
             top_k=5
         )
-        combined_chunks = " ".join(chunk["text"] for chunk in faiss_results)
 
-        # Step 2: Build a structured prompt with guidance and context
-        refinement_prompt = f"""
-You are a highly knowledgeable physics expert. Your task is to generate a clear, detailed, and well-structured response to my question, ensuring a strong conceptual understanding and a professional, high-quality impression.
+        if not faiss_results:
+            raise HTTPException(status_code=404, detail="No relevant content found")
 
-### My Question:
-{user_prompt}
+        # Create hierarchical context structure
+        context = "\n".join([
+            f"*Source {i+1}:* {chunk['text']}\n" 
+            for i, chunk in enumerate(faiss_results)
+            if chunk.get("text")
+        ])
 
-### Instructions:
-- Carefully analyze the provided reference text and use only **the most relevant parts** that closely relate to the question.
-- **Ignore any chunks** that are unrelated or do not contribute meaningfully to the response.
-- Craft a well-structured response that explains the core concept in **simple, precise, and engaging language**.
-- Use **real-world examples** to illustrate the topic effectively.
-- Identify and describe any **types, categories, or variations** relevant to the concept.
-- Incorporate **relevant formulas and equations**, ensuring each variable is clearly defined.
-- Provide **step-by-step derivations** where necessary to enhance clarity.
-- Include **key insights, interesting facts, or historical context** to make the explanation more engaging.
-- Ensure the response is **comprehensive, professional, and insightful** to leave a strong impression.
-- Conclude with a set of **engaging follow-up questions** based on the explanation, ensuring that each question aligns with a concept already covered in the text.
+        # Enhanced prompt template
+        prompt = f"""*Physics Deep Explanation Task*
 
-### Reference Text:
-{combined_chunks}
+            Contextual Knowledge:
+            {context}
 
-### Final Output:
-1. A **refined, structured response** incorporating deep explanations, examples, formulas, and derivations.
-2. A set of **relevant, thought-provoking tidbit questions** for the student to test their understanding, ensuring each question aligns with a concept already explained in the response.
-"""
+            Question: {user_prompt}
 
-        print(refinement_prompt)
-        
-        # Step 3: Generate response using the LLM
-        response_text = llm.invoke(refinement_prompt).strip()
-        print("______________________________________________")
-        print(response_text)
-        # Step 4: Save and return the response
+            Compose a comprehensive response including:
+
+            1. *Core Concept* 
+            - Formal mathematical definition
+            - Vector/scalar nature
+            - SI units and dimensional formula
+            - Related fundamental laws/principles
+
+            2. *Mathematical Framework*
+            - Key equations (boxed notation)
+            - Variable definitions
+            - Derivations (if applicable)
+            - Graphical representations
+
+            3. *Practical Manifestations*
+            - 3+ real-world applications
+            - Engineering/technological uses
+            - Natural phenomena examples
+            - Lab experiment illustrations
+
+            4. *Common Misconceptions*
+            - 2-3 widespread misunderstandings
+            - Detailed corrections
+            - Historical context of errors
+
+            5. *Advanced Connections*
+            - Relationship to other physics concepts
+            - Quantum/relativistic considerations
+            - Current research frontiers
+
+            Format using Markdown with:
+            - Section headers (##)
+            - Bullet points
+            - Tables for comparisons
+            - Boxed equations
+            - Example diagrams (described verbally)"""
+
+        # Generate detailed response
+        output = llm(
+            prompt,
+            max_tokens=2500,  # Increased for depth
+            temperature=0.5,  # More factual focus
+            top_p=0.85,
+            stop=["## End of Response"],
+            echo=False
+        )
+
+        # Post-processing
+        response_text = output["choices"][0]["text"].strip()
+        response_text = re.sub(r"\n{3,}", "\n\n", response_text)
+        response_text = re.sub(r"(?<!\n)\n(?!\n)", " ", response_text)  # Fix mid-paragraph breaks
+
+        if not response_text:
+            raise HTTPException(status_code=500, detail="No answer generated")
+
+        # Create and save the message
         message = await message_service.create_message(
             chat_id=chat_id,
             text=user_prompt,
             response=response_text
         )
+
         return message
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error generating Deepseek response: {str(e)}"
+            detail=f"Error generating detailed response: {str(e)}"
         )
         
 
 #____________________________________________________________________________________    
 quiz_prompt = PromptTemplate.from_template("""
-Given the following text, create exactly 5 multiple-choice quiz questions.
+        Given the following text, create exactly 5 multiple-choice quiz questions.
 
-Strictly return ONLY JSON. Do NOT include any explanation, comments, or additional text outside the JSON.
+        Strictly return ONLY JSON. Do NOT include any explanation, comments, or additional text outside the JSON.
 
-JSON format:
-{{
-  "questions": [
-    {{
-      "description": "Question text?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "answer": "Correct Option"
-    }}
-  ]
-}}
+        JSON format:
+        {{
+        "questions": [
+            {{
+            "description": "Question text?",
+            "options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Correct Option"
+            }}
+        ]
+        }}
 
-Text to use:
-{input_text}
+        Text to use:
+        {input_text}
 
-JSON:
-""")
+        JSON:
+        """)
+        
 quiz_chain = quiz_prompt | llm
 @router.post("/generate-quiz", tags=["LLM"], summary="Generate quiz from text")
 async def generate_quiz(user_prompt: str = Query(..., description="Text input to generate quiz from")):
