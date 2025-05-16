@@ -1,3 +1,5 @@
+from fastapi import Request
+import httpx
 from google import generativeai as genai
 import openai
 from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
@@ -391,3 +393,65 @@ def search_with_images(query: str = Query(..., description="Search query")):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.post("/generate-beamer-slide", tags=["LLM"], summary="Generate beamer slide code with images for a message")
+async def generate_beamer_slide(
+    message_id: str = Query(...,
+                            description="Message ID to generate beamer slide for"),
+    request: Request = None,
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        # 1. Get the message from the database
+        message = await message_service.get_message_by_id(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        # Convert to dict if needed
+        if not isinstance(message, dict):
+            message = dict(message)
+        text = message.get("text")
+        response = message.get("response")
+        if not text or not response:
+            raise HTTPException(
+                status_code=400, detail="Message missing text or response")
+
+        # 2. Call the search-with-images API with the message text
+        base_url = str(
+            request.base_url) if request else "http://localhost:8000/"
+        async with httpx.AsyncClient() as client:
+            search_images_result = await client.post(f"{base_url}search-with-images", params={"query": text})
+        if search_images_result.status_code != 200:
+            raise HTTPException(status_code=500, detail="Image search failed")
+        images_data = search_images_result.json()
+
+        # 3. Prepare the prompt for Gemini
+        images_section = ""
+        for result in images_data.get("results", []):
+            images_section += f"\nSection: {result.get('title', '')}\n"
+            for img in result.get("images", []):
+                images_section += f"- Image: {img.get('image_url', '')} (context: {img.get('context_link', '')})\n"
+
+        beamer_prompt = f"""
+You are a LaTeX Beamer slide generator. Given the following response and related images, generate a complete Beamer slide code.
+
+- The slide should summarize the response.
+- For each image, include it in the slide using its URL (use \\includegraphics[width=0.4\\textwidth]{{<image_url>}}).
+- Add a caption for each image based on its context or title.
+- Use a clear title and structure.
+- The slide should be visually appealing and suitable for a presentation.
+
+Response to present:
+{response}
+
+Images to include:{images_section}
+
+Return only the LaTeX Beamer code, nothing else.
+"""
+
+        # 4. Get the beamer code from Gemini
+        beamer_code = gemini_chain.run(beamer_prompt)
+        return {"beamer_code": beamer_code.strip()}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating beamer slide: {str(e)}")
