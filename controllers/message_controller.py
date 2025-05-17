@@ -362,7 +362,7 @@ def search_with_images(query: str = Query(..., description="Search query")):
         service = build("customsearch", "v1", developerKey=GOOGLE_API_KEY)
         web_results = service.cse().list(q=query, cx=CSE_ID, num=3).execute()
         web_items = web_results.get("items", [])
-        final_results = []
+        final_results = {}
         for item in web_items:
             title = item.get("title")
             link = item.get("link")
@@ -381,19 +381,19 @@ def search_with_images(query: str = Query(..., description="Search query")):
                     "image_url": img.get("link"),
                     "context_link": img.get("image", {}).get("contextLink")
                 })
-            final_results.append({
-                "title": title,
+            # Use title as key, fallback to a safe unique key if title is None
+            key = title if title else f"result_{len(final_results)+1}"
+            final_results[key] = {
                 "link": link,
                 "snippet": snippet,
                 "images": images
-            })
+            }
         return {
             "query": query,
             "results": final_results
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
 
 @router.post("/generate-beamer-slide", tags=["LLM"], summary="Generate beamer slide code with images for a message")
 async def generate_beamer_slide(
