@@ -47,7 +47,6 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CSE_ID = os.getenv("GOOGLE_CSE_ID")
-YOUTUBE_API_KEY = "AIzaSyDx2WLTWAQefrls0gRxIKg4fcuaXKyMg8I"
 
 
 import warnings
