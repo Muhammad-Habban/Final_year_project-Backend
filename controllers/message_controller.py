@@ -124,62 +124,6 @@ async def get_response(
             status_code=500, detail=f"Error generating response: {str(e)}")
 
 
-@router.post("/gemini_flash_response", tags=["LLM"], summary="Send user prompt to Gemini Flash and get response")
-async def get_gemini_flash_response(
-    chat_id: str = Query(..., description="Chat session ID"),
-    user_prompt: str = Query(..., description="User input prompt for LLM"),
-    message_service: MessageService = Depends(get_message_service),
-):
-    try:
-        response = gemini_chain.run(user_prompt)
-        llm_response = response.strip()
-        message = await message_service.create_message(
-            chat_id=chat_id,
-            text=user_prompt,
-            response=llm_response
-        )
-        return message
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generating Gemini Flash response: {str(e)}")
-
-
-@router.post("/enhanced_gemini_response", tags=["LLM"], summary="Retrieve enhanced response from Gemini Flash")
-async def enhanced_gemini_response(
-    chat_id: str = Query(..., description="Chat session ID"),
-    user_prompt: str = Query(..., description="User input prompt for Gemini"),
-    message_service: MessageService = Depends(get_message_service),
-):
-    try:
-        # 1. Perform hybrid search to get relevant chunks
-        faiss_results = message_service.hybrid_search(
-            query=user_prompt, chat_id=chat_id, top_k=5)
-
-        # 2. Combine context chunks
-        combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
-        print("Combined Chunks:", combined_chunks)
-
-        # 3. Create the full prompt (context + user prompt)
-        full_prompt = combined_chunks + "\n" + user_prompt
-
-        # 4. Run the prompt through Gemini
-        response = gemini_chain.run(full_prompt)
-        llm_response = response.strip()
-
-        # 5. Save message to DB
-        message = await message_service.create_message(
-            chat_id=chat_id,
-            text=user_prompt,
-            response=llm_response
-        )
-        return message
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing chunks and generating Gemini Flash response: {str(e)}"
-        )
-
 
 @router.post("/enhanced_response_open_ai", tags=["LLM"], summary="Retrieve enhanced response from GPT-4")
 async def test_chunks(
@@ -365,6 +309,64 @@ async def get_detailed_answer(
             detail=f"Error generating detailed response: {str(e)}"
         )
 
+
+@router.post("/gemini_flash_response", tags=["LLM"], summary="Send user prompt to Gemini Flash and get response")
+async def get_gemini_flash_response(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_prompt: str = Query(..., description="User input prompt for LLM"),
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        response = gemini_chain.run(user_prompt)
+        llm_response = response.strip()
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            text=user_prompt,
+            response=llm_response
+        )
+        return message
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating Gemini Flash response: {str(e)}")
+
+
+@router.post("/enhanced_gemini_response", tags=["LLM"], summary="Retrieve enhanced response from Gemini Flash")
+async def enhanced_gemini_response(
+    chat_id: str = Query(..., description="Chat session ID"),
+    user_prompt: str = Query(..., description="User input prompt for Gemini"),
+    message_service: MessageService = Depends(get_message_service),
+):
+    try:
+        # 1. Perform hybrid search to get relevant chunks
+        faiss_results = message_service.hybrid_search(
+            query=user_prompt, chat_id=chat_id, top_k=5)
+
+        # 2. Combine context chunks
+        combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
+        print("Combined Chunks:", combined_chunks)
+
+        # 3. Create the full prompt (context + user prompt)
+        full_prompt = combined_chunks + "\n" + user_prompt
+
+        # 4. Run the prompt through Gemini
+        response = gemini_chain.run(full_prompt)
+        llm_response = response.strip()
+
+        # 5. Save message to DB
+        message = await message_service.create_message(
+            chat_id=chat_id,
+            text=user_prompt,
+            response=llm_response
+        )
+        return message
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing chunks and generating Gemini Flash response: {str(e)}"
+        )
+        
+        
 quiz_prompt = PromptTemplate.from_template("""
         Given the following text, create exactly 5 multiple-choice quiz questions.
 
