@@ -1,34 +1,59 @@
-from fastapi import Request
+# Standard
+import os
+import re
+import json
+import tempfile
+
+#  3rd Party Libraries
+import requests
 import httpx
+import numpy as np
+import torch  
+
+from fastapi import (
+    APIRouter, HTTPException, Query, Depends, File, UploadFile, Request
+)
+from dotenv import load_dotenv
+
+# Google & OpenAI
+from googleapiclient.discovery import build
 from google import generativeai as genai
 import openai
-from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
+
+# ✅ LangChain
+from langchain_community.llms import LlamaCpp
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+# ✅ Transformers (used for NLP pipelines like summarization, classification, etc.)
+from transformers import pipeline
+
+# ✅ Ollama for local model chat
+from ollama import chat
+
+# ✅ Custom Modules
 from repositories.message_repository import MessageRepository
 from services.message_service import MessageService
 from database import get_database
 from models.message import Message
-import os
-import numpy as np
-from transformers import pipeline
-from ollama import chat
-import json
-import re
+
+# llama-cpp-python
 from llama_cpp import Llama
-from langchain.llms import LlamaCpp
-from langchain.prompts import PromptTemplate
-import soundfile as sf
-import tempfile
-from pydub import AudioSegment
-import torch
-from googleapiclient.discovery import build
-from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import LLMChain
+
+
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CSE_ID = os.getenv("GOOGLE_CSE_ID")
+YOUTUBE_API_KEY = "AIzaSyDx2WLTWAQefrls0gRxIKg4fcuaXKyMg8I"
+
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
@@ -455,3 +480,27 @@ Return only the LaTeX Beamer code, nothing else.
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error generating beamer slide: {str(e)}")
+
+def search_youtube_videos(query: str, api_key: str, max_results: int = 5):
+    url = "https://www.googleapis.com/youtube/v3/search"
+    params = {
+        "part": "snippet",
+        "q": query,
+        "type": "video",
+        "maxResults": max_results,
+        "key": api_key
+    }
+    response = requests.get(url, params=params)
+    return response.json()
+
+
+@router.get("/youtube-search",tags=["Web Search"], summary="Search YouTube videos")
+def youtube_search(q: str = Query(..., description="Search query"), max_results: int = 5):
+    results = search_youtube_videos(q, YOUTUBE_API_KEY, max_results)
+    output = []
+    for item in results.get("items", []):
+        output.append({
+            "title": item["snippet"]["title"],
+            "url": f"https://www.youtube.com/watch?v={item['id']['videoId']}"
+        })
+    return {"results": output}
