@@ -1,4 +1,8 @@
 # Standard
+from fastapi import APIRouter, Request, Query, Depends, HTTPException
+import subprocess
+import uuid
+import warnings
 import os
 import re
 import json
@@ -8,7 +12,7 @@ import tempfile
 import requests
 import httpx
 import numpy as np
-import torch  
+import torch
 
 from fastapi import (
     APIRouter, HTTPException, Query, Depends, File, UploadFile, Request
@@ -49,7 +53,6 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CSE_ID = os.getenv("GOOGLE_CSE_ID")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -122,7 +125,6 @@ async def get_response(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error generating response: {str(e)}")
-
 
 
 @router.post("/enhanced_response_open_ai", tags=["LLM"], summary="Retrieve enhanced response from GPT-4")
@@ -365,8 +367,8 @@ async def enhanced_gemini_response(
             status_code=500,
             detail=f"Error processing chunks and generating Gemini Flash response: {str(e)}"
         )
-        
-        
+
+
 quiz_prompt = PromptTemplate.from_template("""
         Given the following text, create exactly 5 multiple-choice quiz questions.
 
@@ -457,66 +459,100 @@ def search_with_images(query: str = Query(..., description="Search query")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
-@router.post("/generate-beamer-slide", tags=["LLM"], summary="Generate beamer slide code with images for a message")
+
+@router.post("/generate-beamer-slide", tags=["LLM"])
 async def generate_beamer_slide(
     message_id: str = Query(...,
                             description="Message ID to generate beamer slide for"),
     request: Request = None,
-    message_service: MessageService = Depends(get_message_service),
+    message_service: MessageService = Depends(get_message_service)
 ):
     try:
-        # 1. Get the message from the database
+        # Step 1: Get the message
         message = await message_service.get_message_by_id(message_id)
         if not message:
             raise HTTPException(status_code=404, detail="Message not found")
-        # Convert to dict if needed
-        if not isinstance(message, dict):
-            message = dict(message)
-        text = message.get("text")
-        response = message.get("response")
+        message = dict(message)
+        text, response = message.get("text"), message.get("response")
         if not text or not response:
             raise HTTPException(
                 status_code=400, detail="Message missing text or response")
 
-        # 2. Call the search-with-images API with the message text
+        # Step 2: Search for images
         base_url = str(
             request.base_url) if request else "http://localhost:8000/"
         async with httpx.AsyncClient() as client:
-            search_images_result = await client.post(f"{base_url}search-with-images", params={"query": text})
-        if search_images_result.status_code != 200:
+            img_result = await client.post(f"{base_url}search-with-images", params={"query": text})
+        if img_result.status_code != 200:
             raise HTTPException(status_code=500, detail="Image search failed")
-        images_data = search_images_result.json()
+        images_data = img_result.json()
 
-        # 3. Prepare the prompt for Gemini
-        images_section = ""
-        for result in images_data.get("results", []):
-            images_section += f"\nSection: {result.get('title', '')}\n"
+        # Step 3: Generate LaTeX code with curl downloads
+        download_cmds = []
+        include_lines = []
+        img_counter = 1
+
+        for title, result in images_data.get("results", {}).items():
             for img in result.get("images", []):
-                images_section += f"- Image: {img.get('image_url', '')} (context: {img.get('context_link', '')})\n"
+                img_url = img.get("image_url", "")
+                ext = img_url.split(".")[-1].split("?")[0]
+                filename = f"image{img_counter}.{ext}"
+                download_cmds.append(f"curl -o {filename} {img_url}")
+                include_lines.append(
+                    f"\\includegraphics[width=0.45\\textwidth]{{{filename}}}\\\\\n"
+                    f"\\textit{{{img.get('title', '')}}}\\\\\n\\vspace{{1em}}"
+                )
+                img_counter += 1
 
-        beamer_prompt = f"""
-You are a LaTeX Beamer slide generator. Given the following response and related images, generate a complete Beamer slide code.
+        write18_block = "\n".join(
+            [f"\\immediate\\write18{{{cmd}}}" for cmd in download_cmds])
+        image_block = "\n".join(include_lines)
 
-- The slide should summarize the response.
-- For each image, include it in the slide using its URL (use \\includegraphics[width=0.4\\textwidth]{{<image_url>}}).
-- Add a caption for each image based on its context or title.
-- Use a clear title and structure.
-- The slide should be visually appealing and suitable for a presentation.
+        latex_code = f"""
+\\documentclass{{article}}
+\\usepackage{{graphicx}}
+\\usepackage{{lmodern}}
 
-Response to present:
+{write18_block}
+
+\\begin{{document}}
+
+\\section*{{Summary}}
 {response}
 
-Images to include:{images_section}
+\\section*{{Images}}
+{image_block}
 
-Return only the LaTeX Beamer code, nothing else.
+\\end{{document}}
 """
 
-        # 4. Get the beamer code from Gemini
-        beamer_code = gemini_chain.run(beamer_prompt)
-        return {"beamer_code": beamer_code.strip()}
+        # Step 4: Write LaTeX code to file
+        file_id = uuid.uuid4().hex
+        tex_file = f"slide_{file_id}.tex"
+        with open(tex_file, "w") as f:
+            f.write(latex_code)
+
+        # Step 5: Compile LaTeX file
+        subprocess.run(["pdflatex", "--shell-escape", tex_file], check=True)
+
+        # Step 6: Check and return PDF
+        pdf_path = tex_file.replace(".tex", ".pdf")
+        if not os.path.exists(pdf_path):
+            raise HTTPException(
+                status_code=500, detail="PDF generation failed")
+
+        return {
+            "status": "success",
+            "pdf_path": pdf_path
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, detail=f"LaTeX compile error: {e}")
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error generating beamer slide: {str(e)}")
+            status_code=500, detail=f"Unhandled error: {str(e)}")
+
 
 def search_youtube_videos(query: str, api_key: str, max_results: int = 5):
     url = "https://www.googleapis.com/youtube/v3/search"
@@ -531,7 +567,7 @@ def search_youtube_videos(query: str, api_key: str, max_results: int = 5):
     return response.json()
 
 
-@router.get("/youtube-search",tags=["Web Search"], summary="Search YouTube videos")
+@router.get("/youtube-search", tags=["Web Search"], summary="Search YouTube videos")
 def youtube_search(q: str = Query(..., description="Search query"), max_results: int = 5):
     results = search_youtube_videos(q, YOUTUBE_API_KEY, max_results)
     output = []
