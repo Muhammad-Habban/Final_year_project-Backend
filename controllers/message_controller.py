@@ -1,50 +1,42 @@
 # Standard library imports
 import glob
-from fastapi import APIRouter, Request, Query, Depends, HTTPException, File, UploadFile
-import subprocess
-import uuid
-import warnings
+import json
 import os
 import re
-import json
+import subprocess
 import tempfile
-# Third-party library imports
-import requests
+import uuid
+import warnings
+from typing import List
+
+# Third-party imports
 import httpx
 import numpy as np
+import openai
+import requests
 import torch
 from dotenv import load_dotenv
-
-# Google & OpenAI imports
-from googleapiclient.discovery import build
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from google import generativeai as genai
-import openai
-
-# LangChain imports
-from langchain_community.llms import LlamaCpp
+from googleapiclient.discovery import build
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+from langchain_community.llms import LlamaCpp
 from langchain_google_genai import ChatGoogleGenerativeAI
-
-# Transformers for NLP pipelines
+from llama_cpp import Llama
+from ollama import chat
 from transformers import pipeline
 
-# Ollama for local model chat
-from ollama import chat
-
-# Custom module imports
-from repositories.message_repository import MessageRepository
-from services.message_service import MessageService
+# Local imports
 from database import get_database
 from models.message import Message
-
-# Llama-cpp-python for local LLM
-from llama_cpp import Llama
+from repositories.message_repository import MessageRepository
+from services.message_service import MessageService
 
 # Load environment variables
 load_dotenv()
 
-# Configure API keys
+# API Configuration
 openai.api_key = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CSE_ID = os.getenv("GOOGLE_CSE_ID")
@@ -54,30 +46,20 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# Configure Google AI if API key is available
+# Initialize services and models
+router = APIRouter()
+chat_histories = {}
+
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-# Initialize FastAPI router
-router = APIRouter()
-
-# Initialize Gemini LLM with configuration
+# Initialize LLM models
 gemini_llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
     temperature=0.5,
     google_api_key=GOOGLE_API_KEY
 )
 
-# Define Gemini prompt template
-gemini_prompt = PromptTemplate(
-    input_variables=["user_prompt"],
-    template="Question: {user_prompt}\nAnswer:"
-)
-
-# Create Gemini chain
-gemini_chain = LLMChain(llm=gemini_llm, prompt=gemini_prompt)
-
-# Initialize Llama model
 model_path = os.getenv("LLAMA_MODEL_PATH", "llama-2-7b-chat.gguf")
 llm = Llama(
     model_path=model_path,
@@ -89,95 +71,99 @@ llm = Llama(
 
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
+# Prompt templates
+gemini_prompt = PromptTemplate(
+    input_variables=["user_prompt"],
+    template="Question: {user_prompt}\nAnswer:"
+)
 
-def summarize_text(text: str, max_length: int = 130, min_length: int = 30) -> str:
-    """
-    Summarize the input text using the BART summarization pipeline.
+enhanced_response_prompt = PromptTemplate.from_template("""
+You are a helpful, patient teaching assistant for students. You have access to both the previous conversation history and relevant document information.
 
-    Args:
-        text (str): The text to summarize.
-        max_length (int): Maximum length of the summary.
-        min_length (int): Minimum length of the summary.
+---
 
-    Returns:
-        str: The summarized text.
-    """
+**Previous Conversation:**
+{chat_history}
+
+**Relevant Information from Documents:**
+{context}
+
+**Student's Current Question:**
+{question}
+
+---
+
+Your Task:
+
+1. **Understand the Context**
+   - Review the previous conversation to maintain continuity
+   - Consider the relevant document information
+   - Address the current question while maintaining context
+
+2. **Provide a Clear Response**
+   - Explain the concept in simple, clear, and friendly language
+   - Reference previous parts of the conversation when relevant
+   - Include 1-2 real-world or relatable examples
+   - Ask 1-2 follow-up questions to test understanding
+
+3. **Maintain Conversation Flow**
+   - Acknowledge previous discussion points when relevant
+   - Build upon previous explanations
+   - Keep the tone consistent with previous responses
+
+---
+
+
+Use <h> tag to make headings
+Use <strong> tag to make text bold
+Use a new <p> tag to make a new paragraph instead of \\n
+return the response in html markdown format
+
+Make your tone friendly, supportive, and student-focused while maintaining conversation continuity.
+""")
+
+quiz_prompt = PromptTemplate.from_template("""
+Given the following text, create exactly 5 multiple-choice quiz questions.
+
+Strictly return ONLY JSON. Do NOT include any explanation, comments, or additional text outside the JSON.
+
+JSON format:
+{{
+"questions": [
+    {{
+    "description": "Question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": "Correct Option"
+    }}
+]
+}}
+
+Text to use:
+{input_text}
+
+JSON:
+""")
+
+# Initialize chains
+gemini_chain = LLMChain(llm=gemini_llm, prompt=gemini_prompt)
+quiz_chain = quiz_prompt | llm
+
+# Helper functions
+
+
+def summarize_text(text: str, max_length: int = 200, min_length: int = 30) -> str:
+    input_len = len(text.split())
+    if input_len < max_length:
+        max_length = max(input_len - 10, min_length)
     result = summarizer(text, max_length=max_length,
                         min_length=min_length, do_sample=False)
-
     return result[0]['summary_text']
-
-# Dependency injection for message service
 
 
 def get_message_service(db=Depends(get_database)):
     return MessageService(MessageRepository(db['messages']))
 
-
-# Enhanced response prompt template for teaching assistant role
-enhanced_response_prompt = PromptTemplate.from_template("""
-You are a helpful, patient teaching assistant for students.
-
-Below is some context from a book or notes. Your job is to read it carefully, understand the key ideas, and respond to the student's question in a way that helps them learn.
-
----
-
- **Context:**  
-{context}
-
- **Student's Question:**  
-{question}
-
----
-
- Your Task:
-
-1. **Explain the concept in simple, clear, and friendly language**  
-2. **Include 1-2 real-world or relatable examples**  
-3. **Ask 1-2 follow-up questions to test the student's understanding or provoke deeper thinking**
-
----
-
-**Response Format:**
-
-###  Explanation
-(A clear and easy explanation of the concept using simple words.)
-
-###  Example(s)
-(At least one example, analogy, or case to reinforce the idea.)
-
-### Follow-Up Questions
-- Question 1  
-- (Optional) Question 2
-
-Make your tone friendly, supportive, and student-focused.
-""")
-
-# Quiz generation prompt template
-quiz_prompt = PromptTemplate.from_template("""
-        Given the following text, create exactly 5 multiple-choice quiz questions.
-
-        Strictly return ONLY JSON. Do NOT include any explanation, comments, or additional text outside the JSON.
-
-        JSON format:
-        {{
-        "questions": [
-            {{
-            "description": "Question text?",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "answer": "Correct Option"
-            }}
-        ]
-        }}
-
-        Text to use:
-        {input_text}
-
-        JSON:
-        """)
-
-# Create quiz chain
-quiz_chain = quiz_prompt | llm
+# Dependency injection for message service
 
 
 @router.get("/messages/{chat_id}", tags=["messages"], summary="Get messages by chat ID", response_model=list[Message])
@@ -223,47 +209,71 @@ async def get_response(
             status_code=500, detail=f"Error generating response: {str(e)}")
 
 
-@router.post("/enhanced_response_open_ai", tags=["LLM"], summary="Retrieve enhanced response from GPT-4")
-async def test_chunks(
+@router.post("/open_ai_response_with_context", tags=["LLM"], summary="Send user prompt with context and get response")
+async def get_response_with_context(
     chat_id: str = Query(..., description="Chat session ID"),
     user_prompt: str = Query(..., description="User input prompt for LLM"),
     message_service: MessageService = Depends(get_message_service),
 ):
-    """Generate an enhanced response using GPT-4 with context from previous messages."""
     try:
-        # Retrieve relevant context from previous messages
+        # Initialize history if new chat
+        if chat_id not in chat_histories:
+            chat_histories[chat_id] = []
+
+        history = chat_histories[chat_id]
+
+        # Append user message
+        history.append({"role": "user", "content": user_prompt})
+
+        # Get relevant document context
         faiss_results = message_service.hybrid_search(
             query=user_prompt, chat_id=chat_id, top_k=5)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
 
-        # Format prompt with context
+        # Format chat history for context
+        chat_history_text = "\n".join([
+            f"{msg['role']}: {msg['content']}"
+            for msg in history[-6:]  # Last 6 messages for context
+        ])
+
+        # Format prompt with both chat history and document context
         full_prompt = enhanced_response_prompt.format(
+            chat_history=chat_history_text,
             context=combined_chunks,
             question=user_prompt
         )
 
-        # Generate response
+        # Call OpenAI with full conversation history
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": full_prompt},
+                {"role": "user", "content": full_prompt}
             ],
-            max_tokens=4096,
+            max_tokens=1000,
             temperature=0.7
         )
-        llm_response = response['choices'][0]['message']['content'].strip()
 
-        # Save message
+        full_ai_response = response['choices'][0]['message']['content'].strip()
+
+        # Summarize AI response to keep context small
+        summarized_response = summarize_text(full_ai_response)
+
+        # Append summarized AI response to history
+        history.append({"role": "assistant", "content": summarized_response})
+
+        # Save full AI response to DB (not summarized, full detail)
         message = await message_service.create_message(
             chat_id=chat_id,
             text=user_prompt,
-            response=llm_response
+            response=full_ai_response
         )
+
         return message
+
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error processing chunks and generating response: {str(e)}")
+            status_code=500, detail=f"Error generating response with context: {str(e)}")
 
 
 @router.post("/deepseek_response", tags=["LLM"], summary="Send user prompt to Deepseek model and get response")
@@ -289,56 +299,77 @@ async def get_deepseek_response(
             status_code=500, detail=f"Error generating Deepseek response: {str(e)}")
 
 
-@router.post("/enhanced_response_deepseek", tags=["LLM"], summary="Retrieve enhanced response from Deepseek")
-async def test_chunks_deepseek(
+@router.post("/enhanced_response_deepseek", tags=["LLM"], summary="Retrieve enhanced response from Deepseek with context")
+async def enhanced_response_deepseek(
     chat_id: str = Query(..., description="Chat session ID"),
     user_prompt: str = Query(...,
                              description="User input prompt for Deepseek"),
     message_service: MessageService = Depends(get_message_service),
 ):
-    """Generate an enhanced response using Deepseek with context from previous messages."""
     try:
-        # Retrieve relevant context
+        # Init chat history if new chat
+        if chat_id not in chat_histories:
+            chat_histories[chat_id] = []
+
+        history = chat_histories[chat_id]
+        history.append({"role": "user", "content": user_prompt})
+
+        # Get relevant document context
         faiss_results = message_service.hybrid_search(
             query=user_prompt, chat_id=chat_id, top_k=5)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
 
-        # Format prompt with context
+        # Format chat history for context
+        chat_history_text = "\n".join([
+            f"{msg['role']}: {msg['content']}"
+            for msg in history[-6:]  # Last 6 messages for context
+        ])
+
+        # Format prompt with both chat history and document context
         full_prompt = enhanced_response_prompt.format(
+            chat_history=chat_history_text,
             context=combined_chunks,
             question=user_prompt
         )
 
-        # Generate response
+        # Call Deepseek model with full prompt
         response = chat(model='deepseek-r1:8b',
                         messages=[{'role': 'user', 'content': full_prompt}])
-        deepseek_response = response.message.content.strip()
+        full_ai_response = response.message.content.strip()
 
-        # Clean response if needed
-        if deepseek_response.startswith("<think>"):
-            deepseek_response = deepseek_response.split("</think>")[-1].strip()
+        # Summarize AI response before adding to history
+        summarized_response = summarize_text(full_ai_response)
 
-        # Save message
+        # Append summarized AI response to history
+        history.append({"role": "assistant", "content": summarized_response})
+
+        # Save full AI response to DB (full detail, not summary)
         message = await message_service.create_message(
             chat_id=chat_id,
             text=user_prompt,
-            response=deepseek_response
+            response=full_ai_response
         )
         return message
+
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error processing chunks and generating Deepseek response: {str(e)}")
+            status_code=500, detail=f"Error processing chunks and generating Deepseek response with context: {str(e)}")
 
 
-@router.post("/deepseek_q_response", tags=["LLM"], summary="Get detailed response from quantized Deepseek model")
-async def get_detailed_answer(
+@router.post("/deepseek_q_response", tags=["LLM"], summary="Get detailed response from quantized Deepseek model with context")
+async def deepseek_q_response_with_context(
     chat_id: str = Query(..., description="Chat session ID"),
     user_prompt: str = Query(..., description="User input prompt for the LLM"),
     message_service: MessageService = Depends(get_message_service),
 ):
-    """Generate a detailed response using the quantized Deepseek model with context."""
     try:
-        # Retrieve relevant context
+        if chat_id not in chat_histories:
+            chat_histories[chat_id] = []
+
+        history = chat_histories[chat_id]
+        history.append({"role": "user", "content": user_prompt})
+
+        # Get relevant document context
         faiss_results = message_service.hybrid_search(
             query=user_prompt,
             chat_id=chat_id,
@@ -348,22 +379,29 @@ async def get_detailed_answer(
             raise HTTPException(
                 status_code=404, detail="No relevant content found")
 
-        # Format context
-        context = "\n".join([
+        # Format chat history for context
+        chat_history_text = "\n".join([
+            f"{msg['role']}: {msg['content']}"
+            for msg in history[-6:]  # Last 6 messages for context
+        ])
+
+        # Format document context
+        doc_context = "\n".join([
             f"*Source {i+1}:* {chunk['text']}\n"
             for i, chunk in enumerate(faiss_results)
             if chunk.get("text")
         ])
 
-        # Format prompt
-        prompt = enhanced_response_prompt.format(
-            context=context,
+        # Format prompt with both chat history and document context
+        full_prompt = enhanced_response_prompt.format(
+            chat_history=chat_history_text,
+            context=doc_context,
             question=user_prompt
         )
 
         # Generate response
         output = llm(
-            prompt,
+            full_prompt,
             max_tokens=2500,
             temperature=0.5,
             top_p=0.85,
@@ -371,25 +409,30 @@ async def get_detailed_answer(
             echo=False
         )
 
-        # Process response
-        response_text = output["choices"][0]["text"].strip()
-        response_text = re.sub(r"\n{3,}", "\n\n", response_text)
-        response_text = re.sub(r"(?<!\n)\n(?!\n)", " ", response_text)
+        full_ai_response = output["choices"][0]["text"].strip()
+        full_ai_response = re.sub(r"\n{3,}", "\n\n", full_ai_response)
+        full_ai_response = re.sub(r"(?<!\n)\n(?!\n)", " ", full_ai_response)
 
-        if not response_text:
+        if not full_ai_response:
             raise HTTPException(status_code=500, detail="No answer generated")
 
-        # Save message
+        # Summarize response for history
+        summarized_response = summarize_text(full_ai_response)
+
+        # Add to chat history
+        history.append({"role": "assistant", "content": summarized_response})
+
+        # Save full response to DB
         message = await message_service.create_message(
             chat_id=chat_id,
             text=user_prompt,
-            response=response_text
+            response=full_ai_response
         )
         return message
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error generating detailed response: {str(e)}"
+            detail=f"Error generating detailed Deepseek response with context: {str(e)}"
         )
 
 
@@ -414,40 +457,56 @@ async def get_gemini_flash_response(
             status_code=500, detail=f"Error generating Gemini Flash response: {str(e)}")
 
 
-@router.post("/enhanced_gemini_response", tags=["LLM"], summary="Retrieve enhanced response from Gemini Flash")
-async def enhanced_gemini_response(
+@router.post("/enhanced_gemini_response", tags=["LLM"], summary="Retrieve enhanced response from Gemini Flash with context")
+async def enhanced_gemini_response_with_context(
     chat_id: str = Query(..., description="Chat session ID"),
     user_prompt: str = Query(..., description="User input prompt for Gemini"),
     message_service: MessageService = Depends(get_message_service),
 ):
-    """Generate an enhanced response using Gemini Flash with context from previous messages."""
     try:
-        # Retrieve relevant context
+        if chat_id not in chat_histories:
+            chat_histories[chat_id] = []
+
+        history = chat_histories[chat_id]
+        history.append({"role": "user", "content": user_prompt})
+
+        # Get relevant document context
         faiss_results = message_service.hybrid_search(
             query=user_prompt, chat_id=chat_id, top_k=5)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
 
-        # Format prompt with context
+        # Format chat history for context
+        chat_history_text = "\n".join([
+            f"{msg['role']}: {msg['content']}"
+            for msg in history[-6:]  # Last 6 messages for context
+        ])
+
+        # Format prompt with both chat history and document context
         full_prompt = enhanced_response_prompt.format(
+            chat_history=chat_history_text,
             context=combined_chunks,
             question=user_prompt
         )
 
-        # Generate response
-        response = gemini_chain.run(full_prompt)
-        llm_response = response.strip()
+        full_ai_response = gemini_chain.run(full_prompt).strip()
 
-        # Save message
+        # Summarize response for history
+        summarized_response = summarize_text(full_ai_response)
+
+        # Add to chat history
+        history.append({"role": "assistant", "content": summarized_response})
+
+        # Save full response to DB
         message = await message_service.create_message(
             chat_id=chat_id,
             text=user_prompt,
-            response=llm_response
+            response=full_ai_response
         )
         return message
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing chunks and generating Gemini Flash response: {str(e)}"
+            detail=f"Error processing chunks and generating Gemini Flash response with context: {str(e)}"
         )
 
 
@@ -455,14 +514,18 @@ async def enhanced_gemini_response(
 async def generate_quiz(user_prompt: str = Query(..., description="Text input to generate quiz from")):
     try:
         formatted_prompt = quiz_prompt.format(input_text=user_prompt)
+        print(f"Formatted prompt: {formatted_prompt}")
         output = llm(
             formatted_prompt,
             max_tokens=1000,
             temperature=0.7,
             stop=["```", "JSON"]
         )
+        print(f"Output: {output}")
         response = output["choices"][0]["text"]
+        print(f"Response: {response}")
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        print(f"JSON match: {json_match}")
         if not json_match:
             raise ValueError("No JSON found in the LLM response.")
         quiz_json = json.loads(json_match.group(0))
