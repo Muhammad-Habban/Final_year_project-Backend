@@ -24,19 +24,19 @@ from googleapiclient.discovery import build
 from google import generativeai as genai
 import openai
 
-# ✅ LangChain
+#  LangChain
 from langchain_community.llms import LlamaCpp
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-# ✅ Transformers (used for NLP pipelines like summarization, classification, etc.)
+#  Transformers (used for NLP pipelines like summarization, classification, etc.)
 from transformers import pipeline
 
-# ✅ Ollama for local model chat
+#  Ollama for local model chat
 from ollama import chat
 
-# ✅ Custom Modules
+#  Custom Modules
 from repositories.message_repository import MessageRepository
 from services.message_service import MessageService
 from database import get_database
@@ -99,6 +99,45 @@ async def get_messages_by_chat_id(
             status_code=500, detail=f"Error fetching messages: {str(e)}")
 
 
+enhanced_response_prompt = PromptTemplate.from_template("""
+You are a helpful, patient teaching assistant for students.
+
+Below is some context from a book or notes. Your job is to read it carefully, understand the key ideas, and respond to the student's question in a way that helps them learn.
+
+---
+
+ **Context:**  
+{context}
+
+ **Student's Question:**  
+{question}
+
+---
+
+ Your Task:
+
+1. **Explain the concept in simple, clear, and friendly language**  
+2. **Include 1-2 real-world or relatable examples**  
+3. **Ask 1-2 follow-up questions to test the student's understanding or provoke deeper thinking**
+
+---
+
+**Response Format:**
+
+###  Explanation
+(A clear and easy explanation of the concept using simple words.)
+
+###  Example(s)
+(At least one example, analogy, or case to reinforce the idea.)
+
+### Follow-Up Questions
+- Question 1  
+- (Optional) Question 2
+
+Make your tone friendly, supportive, and student-focused.
+""")
+
+
 @router.post("/open_ai_response", tags=["LLM"], summary="Send user prompt to GPT-4 and get response")
 async def get_response(
     chat_id: str = Query(..., description="Chat session ID"),
@@ -137,14 +176,18 @@ async def test_chunks(
         faiss_results = message_service.hybrid_search(
             query=user_prompt, chat_id=chat_id, top_k=5)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
-        full_prompt = combined_chunks + "\n" + user_prompt
+        full_prompt = enhanced_response_prompt.format(
+            context=combined_chunks,
+            question=user_prompt
+        )
+
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": full_prompt},
             ],
-            max_tokens=1000,
+            max_tokens=4096,
             temperature=0.7
         )
         llm_response = response['choices'][0]['message']['content'].strip()
@@ -193,7 +236,11 @@ async def test_chunks_deepseek(
             query=user_prompt, chat_id=chat_id, top_k=5)
         combined_chunks = " ".join([chunk["text"] for chunk in faiss_results])
         print("Combined Chunks:", combined_chunks)
-        full_prompt = combined_chunks + "\n" + user_prompt
+        full_prompt = enhanced_response_prompt.format(
+            context=combined_chunks,
+            question=user_prompt
+        )
+
         response = chat(model='deepseek-r1:8b',
                         messages=[{'role': 'user', 'content': full_prompt}])
         deepseek_response = response.message.content.strip()
@@ -230,61 +277,10 @@ async def get_detailed_answer(
             for i, chunk in enumerate(faiss_results)
             if chunk.get("text")
         ])
-        prompt = f"""
-                    *Enhanced Response Task*  
-
-                    **Context:**  
-                    {context}  
-
-                    **User Prompt/Question:**  
-                    {user_prompt}  
-
-                    Using the information provided in the context, generate a **comprehensive, well-structured, and insightful explanation** of the topic or question. Ensure the response includes the following:
-
-                    ---
-
-                    ## 1. **Clear Explanation**  
-                    - Provide a detailed and accurate explanation of the main topic or concept  
-                    - Define key terms or ideas in simple, precise language  
-                    - Address the user's question directly, with clarity and depth  
-
-                    ---
-
-                    ## 2. **Use of Contextual Information**  
-                    - Integrate relevant facts, data, or references from the given context  
-                    - Highlight connections between context and the topic  
-                    - Avoid repeating the context verbatim—use it to **add insight**  
-
-                    ---
-
-                    ## 3. **Examples and Illustrations**  
-                    - Include at least two real-world or relatable examples  
-                    - Use analogies, case studies, or comparisons if helpful  
-                    - Where applicable, describe diagrams, visual models, or scenarios  
-
-                    ---
-
-                    ## 4. **Fact-Based and Logical Reasoning**  
-                    - Support explanations with logic, evidence, or citations where needed  
-                    - Avoid vague claims—make statements grounded in knowledge or context  
-                    - If applicable, provide numbers, dates, or references  
-
-                    ---
-
-                    ## 5. **Broader Relevance or Implications**  
-                    - Explain why this topic matters or how it connects to larger themes  
-                    - Mention applications, consequences, or cross-disciplinary relevance  
-                    - Optionally, suggest further reading or questions for reflection  
-
-                    ---
-
-                    ### **Formatting Guidelines:**  
-                    - Use **HTML** format  
-                    - Section headers, bullet points, and clear structure  
-                    - Highlight examples and key insights  
-                    - Describe any diagrams or visuals in words if necessary  
-
-                    """
+        prompt = enhanced_response_prompt.format(
+            context=context,
+            question=user_prompt
+        )
         print("Prompt:", prompt)
         output = llm(
             prompt,
@@ -348,7 +344,10 @@ async def enhanced_gemini_response(
         print("Combined Chunks:", combined_chunks)
 
         # 3. Create the full prompt (context + user prompt)
-        full_prompt = combined_chunks + "\n" + user_prompt
+        full_prompt = student_learning_prompt.format(
+            context=combined_chunks,
+            question=user_prompt
+        )
 
         # 4. Run the prompt through Gemini
         response = gemini_chain.run(full_prompt)
