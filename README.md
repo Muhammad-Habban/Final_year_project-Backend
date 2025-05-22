@@ -1,103 +1,249 @@
-# Book Vision RAG Pipeline
+# Book Vision Backend
 
-Book Vision is a backend system designed to handle user interactions with PDF documents, enabling users to create chats, ask questions, and retrieve responses using a Retrieval-Augmented Generation (RAG) pipeline. The system uses MongoDB for storing users, chats, and messages, and SQLite3 for storing document chunks and embeddings. Faiss is used for efficient similarity search, and Sentence Transformers are used for generating embeddings.
+This is a FastAPI-based backend application that provides AI-powered chat functionality with document processing capabilities. The application supports multiple AI models, PDF document processing, and interactive chat features.
 
----
+## Features
 
-## Project Structure
+- User authentication and authorization
+- PDF document processing and chunking
+- Multiple AI model support (OpenAI GPT-4, Google Gemini, Deepseek)
+- Hybrid search functionality combining FAISS and BM25
+- Chat history management
+- YouTube video search integration
+- LaTeX beamer slide generation
+- Quiz generation from text
 
-### Models
-- **User**: Represents a user in the system.
-- **Chat**: Represents a chat session associated with a user and a PDF document.
-- **Message**: Represents a message in a chat, including user prompts and LLM responses.
+## Prerequisites
 
-### Repositories
-- **user_repository**: Handles database operations for the `User` model.
-- **chat_repository**: Handles database operations for the `Chat` model.
-- **message_repository**: Handles database operations for the `Message` model.
+- Python 3.8+
+- MongoDB
+- Required Python packages (see requirements.txt)
+- API keys for:
+  - OpenAI
+  - Google (for Gemini and Custom Search)
+  - YouTube Data API
 
-### Services
-- **user_service**: Contains business logic for user-related operations.
-- **chat_service**: Contains business logic for chat-related operations.
-- **message_service**: Contains business logic for message-related operations.
+## Installation
 
-### Controllers
-- **user_controller**: Exposes endpoints for user management.
-  - `/login`: User login.
-  - `/signup`: User registration.
-  - `/me`: Retrieves information about the logged-in user.
-- **chat_controller**: Exposes endpoints for chat management.
-  - `/create_chat`: Creates a chat by processing a PDF and generating chunks.
-  - `/all-chat`: Retrieves all chats in the database.
-  - `/user-chats`: Retrieves chats for a specific user.
-- **message_controller**: Exposes endpoints for message management.
-  - `/messages`: Retrieves all messages.
-  - `/getresponse`: Sends a user prompt to the LLM and retrieves a response.
-  - `/chat-messages`: Retrieves messages for a specific chat.
-
----
-
-## Technologies Used
-- **Database**:
-  - MongoDB: Stores users, chats, and messages.
-  - SQLite3: Stores document chunks and embeddings.
-- **Embeddings**:
-  - Sentence Transformers: Generates embeddings for document chunks.
-- **Similarity Search**:
-  - Faiss: Performs efficient cosine similarity search.
-- **LLM Integration**:
-  - A pre-trained language model (Open ai,Deepseek,LLama) for generating responses.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-1. Python 3.8 or higher.
-2. MongoDB installed and running.
-3. SQLite3 installed.
-4. Faiss and Sentence Transformers installed.
-
-
-### Installation
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/Muhammad-Habban/Final_year_project-Backend
 
-2. Install Dependencies
+```bash
+git clone <repository-url>
+cd <repository-name>
+```
+
+2. Create and activate a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Setup Environmental Variables
+4. Create a `.env` file in the root directory with the following variables:
 
-   
-5. Running the Application
-Start the backend server:
-
-bash
+```env
+OPENAI_API_KEY=your_openai_api_key
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_CSE_ID=your_google_cse_id
+YOUTUBE_API_KEY=your_youtube_api_key
+LLAMA_MODEL_PATH=path_to_llama_model
 ```
+
+## Running the Application
+
+1. Start MongoDB service
+
+2. Run the FastAPI application:
+
+```bash
 uvicorn main:app --reload
 ```
 
-### API Endpoints
-## User Controller
-POST /login: Authenticate a user.
+The application will be available at `http://localhost:8000`
 
-POST /signup: Register a new user.
+## API Endpoints
 
-GET /me: Retrieve information about the logged-in user.
+### User Management
 
-## Chat Controller
-POST /create_chat: Upload a PDF and create a chat session.
+#### POST /signup
 
-GET /all-chat: Retrieve all chats.
+- Creates a new user account
+- Request body: `{ "email": string, "password": string }`
+- Returns: User details with ID
 
-GET /user-chats: Retrieve chats for a specific user.
+#### POST /login
 
-## Message Controller
-GET /messages: Retrieve all messages.
+- Authenticates user and returns access tokens
+- Request body: `{ "username": string, "password": string }`
+- Returns: Access and refresh tokens
 
-POST /getresponse: Send a prompt and retrieve a response from the LLM.
+#### GET /me
 
-GET /chat-messages: Retrieve messages for a specific chat.
+- Returns details of currently logged-in user
+- Requires authentication
+- Returns: User details
+
+### Chat Management
+
+#### POST /create-chat
+
+- Uploads a PDF and creates a new chat
+- Form data: `file` (PDF), `user_id`
+- Returns: Chat ID and success message
+
+#### GET /all-chats
+
+- Retrieves all chats
+- Returns: List of all chats
+
+#### GET /user-chats/{user_id}
+
+- Retrieves chats for a specific user
+- Returns: List of user's chats
+
+#### PUT /edit-chat/{chat_id}
+
+- Updates chat details
+- Query params: `title` (optional)
+- Returns: Success message
+
+#### DELETE /delete-chat/{chat_id}
+
+- Deletes a specific chat
+- Returns: Success message
+
+### Message Management
+
+#### GET /messages/{chat_id}
+
+- Retrieves all messages for a specific chat
+- Returns: List of messages
+
+### AI Model Endpoints
+
+#### POST /open_ai_response
+
+- Generates response using OpenAI GPT-4
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message
+
+#### POST /open_ai_response_with_context
+
+- Generates response using GPT-4 with document context
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message with context
+
+#### POST /deepseek_response
+
+- Generates response using Deepseek model
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message
+
+#### POST /enhanced_response_deepseek
+
+- Generates enhanced response using Deepseek with context
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message with context
+
+#### POST /deepseek_q_response
+
+- Generates response using quantized Deepseek model
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message
+
+#### POST /gemini_flash_response
+
+- Generates response using Google Gemini Flash
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message
+
+#### POST /enhanced_gemini_response
+
+- Generates enhanced response using Gemini with context
+- Query params: `chat_id`, `user_prompt`
+- Returns: Generated message with context
+
+### Additional Features
+
+#### POST /generate-quiz
+
+- Generates quiz questions from provided text
+- Query params: `user_prompt`
+- Returns: JSON with quiz questions and answers
+
+#### POST /search-with-images
+
+- Searches web and returns results with images
+- Query params: `query`
+- Returns: Web results with associated images
+
+#### POST /generate-beamer-slide
+
+- Generates LaTeX beamer slides from message content
+- Query params: `message_id`
+- Returns: PDF path
+
+#### GET /youtube-search
+
+- Searches YouTube videos
+- Query params: `q`, `max_results` (optional)
+- Returns: List of video results
+
+## Project Structure
+
+```
+├── controllers/
+│   ├── chat_controller.py
+│   ├── message_controller.py
+│   └── user_controller.py
+├── models/
+│   ├── chat.py
+│   ├── message.py
+│   └── user.py
+├── repositories/
+│   ├── chat_repository.py
+│   ├── message_repository.py
+│   └── user_repository.py
+├── services/
+│   ├── chat_service.py
+│   ├── message_service.py
+│   └── user_service.py
+├── database.py
+├── main.py
+└── requirements.txt
+```
+
+## Security
+
+- Password hashing using bcrypt
+- JWT token-based authentication
+- Secure password storage
+- API key management through environment variables
+
+## Error Handling
+
+The application includes comprehensive error handling for:
+
+- Invalid file types
+- Authentication failures
+- Database errors
+- API rate limiting
+- Invalid requests
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+[Add your license information here]
