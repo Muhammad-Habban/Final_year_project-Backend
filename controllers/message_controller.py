@@ -25,7 +25,10 @@ from langchain_community.llms import LlamaCpp
 from langchain_google_genai import ChatGoogleGenerativeAI
 from llama_cpp import Llama
 from ollama import chat
+import ollama
+
 from transformers import pipeline
+from fastapi.responses import FileResponse
 
 # Local imports
 from database import get_database
@@ -158,6 +161,53 @@ def summarize_text(text: str, max_length: int = 200, min_length: int = 30) -> st
     result = summarizer(text, max_length=max_length,
                         min_length=min_length, do_sample=False)
     return result[0]['summary_text']
+
+
+def call_deepseek_chat(prompt, model="deepseek-r1:8b"):
+    """Calls Deepseek via Ollama with optimized parameters."""
+    try:
+        # Send the prompt to the deepseek model
+        response = ollama.chat(
+            model=model,
+            messages=[
+                {"role": "system", "content": "Use precise academic language with clear explanations. Structure content with logical sections. Always use LaTeX equations with $ delimiters. Include real-world examples in bullet points. Highlight key terms in bold."},
+                {"role": "user", "content": prompt}
+            ],
+        )
+
+        # Inspect the full response to understand its structure
+        print("Model Response:", response)  # Print the full response
+
+        # Check if the 'message' and 'content' keys exist in the response
+        if 'message' in response and 'content' in response['message']:
+            # Extract the content and clean up the LaTeX formatting
+            content = response['message']['content']
+            # Remove the <think></think> tags if they exist
+            clean_content = re.sub(r'<think>.*?</think>',
+                                   '', content, flags=re.DOTALL).strip()
+            return clean_content
+        else:
+            print(
+                f"Error: 'content' key not found in the response. Full response: {response}")
+            return "An error occurred: 'content' key not found in the response."
+
+    except Exception as e:
+        print(f"🚨 Model Error: {str(e)}")
+        return f"An error occurred: {str(e)}"
+
+
+def clean_latex_content(latex_code):
+    """Extracts only the LaTeX content between \begin{document} and \\end{document}."""
+    # Use regex to match content between \begin{document} and \end{document}
+    match = re.search(
+        r'\\begin{document}(.*)\\end{document}', latex_code, re.DOTALL)
+
+    if match:
+        # Return only the content between \begin{document} and \end{document}
+        return match.group(1).strip()
+    else:
+        # Return an error message if the match fails
+        return "Error: No LaTeX content found between \\begin{document} and \\end{document}."
 
 
 def get_message_service(db=Depends(get_database)):
@@ -687,56 +737,32 @@ async def generate_beamer_slide(
         image_block = "\n".join(include_lines)
 
         openai_prompt = f"""
+
 GENERATE CORRECT SYNTAX FOR A LATEX BEAMER DOCUMENT THAT:
 
-1. Uses the `Madrid` theme and creates a visually appealing, well-structured Beamer presentation.
+\\section*{{Summary}}
+- Includes the following text in a well-formatted slide(s):
+SLIDE 1 AND 2:
+{response}
 
-2. Starts with the following write18 block to enable dynamic image download:
+\\section*{{Images}}
+EXPAND ON THIS RESPONSE IF NECESSARY, CREATE BEAUTIFULL BULLET POINTS AND EXPLAIN IT
+SLIDE 3 AND 4:
+- Adds these images at appropriate places, with captions, using the local filenames below:
+{image_block}
+DO ADD A CAPTION TO EACH IMAGE IF YOU CAN, AND ADD MORE SLIDES IF NEEDED TO COVER ALL THE IMAGES
+SLIDE 5:
+ADD THE FOLLOWING REFERAL LINK
+{reference_links}
+
+- Starts the LaTeX code with these commands to download images dynamically:
 {write18_block}
 
-3. STRUCTURE THE CONTENT INTO MULTIPLE SLIDES AS FOLLOWS:
+\\end{{document}}
+Return ONLY the complete LaTeX code, starting with \\documentclass and ending with \\end{{document}}.
+IMPORTANT: ONLY GENERATE LATEX CODE IN RESPONSE, DO NOT SAY ANYTHING ELSE
 
-   - **Slide 1: Definition**
-     Title the slide "Definition". Clearly define the topic or concept using the `{response}` text.
-
-   - **Slide 2: Explanation with Example**
-     Title the slide "Explanation". Expand on the `{response}` by:
-       • Breaking it into clear, concise bullet points
-       • Adding a real-life or illustrative example
-       • Ensuring the explanation is easy to understand
-
-   - **Slides 3+: Images**
-     Create one slide per image from `{image_block}`. Each slide should:
-       • Display the image using `\\IfFileExists`
-       • Include a meaningful caption using the filename or context
-       • Optionally add bullet points or explanation about the image
-
-   - **Second Last Slide: Follow-Up Questions**
-     Title the slide "Follow-Up Questions". Generate 3-5 thoughtful questions based on the topic that can lead to further discussion or exploration.
-
-   - **Final Slide: References**
-     Title the slide "References". Include all items from `{reference_links}` in bullet point format. Make sure they are formatted cleanly and are easy to read.
-
-4. Wrap every `\\includegraphics` command inside an `\\IfFileExists` check to prevent errors if the image is missing.
-
-5. Return ONLY the full LaTeX code, starting with `\\documentclass` and ending with `\\end{{document}}`. DO NOT INCLUDE ANY EXPLANATION OUTSIDE THE LATEX CODE.
-
-6. Ensure all slides follow a consistent color scheme and pleasant formatting for readability.
-
-7. do not include more than 2 images.
-
-8. do not include more than 5 slides.
-
-NOTE: Use only built-in packages or standard packages (graphicx, xcolor, etc.). DO NOT include external dependencies unless absolutely necessary.
-
-INPUTS:
-- `{response}`: The explanation or initial answer
-- `{image_block}`: List of image filenames (e.g., image1.png, graph2.jpg, etc.)
-- `{reference_links}`: List of links or citations
-- `{write18_block}`: LaTeX commands for dynamic image download
-
-THIS PROMPT MUST BE FOLLOWED STRICTLY TO CREATE MULTIPLE SLIDES WITH STRUCTURED CONTENT IN A PROFESSIONAL BEAMER FORMAT.
-
+IMPORTANT: wrap every \\includegraphics in a \\IfFileExists check
 """
 
         # 5. Call OpenAI ChatCompletion
@@ -769,10 +795,145 @@ THIS PROMPT MUST BE FOLLOWED STRICTLY TO CREATE MULTIPLE SLIDES WITH STRUCTURED 
             raise HTTPException(
                 status_code=500, detail="PDF generation failed")
 
-        return {
-            "status": "success",
-            "pdf_path": pdf_path
-        }
+        return FileResponse(
+            path=pdf_path,
+            filename=os.path.basename(pdf_path),
+            media_type="application/pdf"
+        )
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, detail=f"LaTeX compile error: {e}")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Unhandled error: {str(e)}")
+
+
+@router.post("/generate-beamer-slide-deepseek", tags=["LLM"], summary="Generate LaTeX Beamer slides from message using Deepseek")
+async def generate_beamer_slide_deepseek(
+    message_id: str = Query(...,
+                            description="Message ID to generate beamer slide for"),
+    request: Request = None,
+    message_service: MessageService = Depends(get_message_service)
+):
+    try:
+        # Fetch message content from DB
+        message = await message_service.get_message_by_id(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        message = dict(message)
+        text, response = message.get("text"), message.get("response")
+        if not text or not response:
+            raise HTTPException(
+                status_code=400, detail="Message missing text or response")
+
+        # Search for images related to the message text
+        base_url = str(
+            request.base_url) if request else "http://localhost:8000/"
+        # summarize the response
+        summary = summarize_text(response, 25, 10)
+        async with httpx.AsyncClient() as client:
+            img_result = await client.post(f"{base_url}search-with-images", params={"query": summary})
+        if img_result.status_code != 200:
+            raise HTTPException(status_code=500, detail="Image search failed")
+        images_data = img_result.json()
+
+        # Prepare download commands and image includes for LaTeX
+        download_cmds = []
+        include_lines = []
+        image_filenames = []
+        reference_links = []
+        img_counter = 1
+
+        for title, result in images_data.get("results", {}).items():
+            for img in result.get("images", []):
+                img_url = img.get("image_url", "")
+                ext = img_url.split(".")[-1].split("?")[0].lower()
+                if ext in ["jpg"]:
+                    filename = f"image{img_counter}.{ext}"
+                    download_cmds.append(f"curl -o {filename} {img_url}")
+                    include_lines.append(
+                        f"\\includegraphics[width=0.45\\textwidth]{{{filename}}}\\\\\n"
+                        f"\\textit{{{img.get('title', '')}}}\\\\\n\\vspace{{1em}}"
+                    )
+                    image_filenames.append(filename)
+                    img_counter += 1
+            link = result.get("link")
+            if link:
+                reference_links.append(link)
+
+        write18_block = "\n".join(
+            [f"\\immediate\\write18{{{cmd}}}" for cmd in download_cmds])
+        image_block = "\n".join(include_lines)
+
+        # Compose prompt for Deepseek (adapted from your earlier prompt)
+        deepseek_prompt = f"""
+GENERATE CORRECT SYNTAX FOR A LATEX BEAMER DOCUMENT THAT:
+
+1. Uses the `Madrid` theme and creates a visually appealing, well-structured Beamer presentation.
+
+2. Starts with the following write18 block to enable dynamic image download:
+{write18_block}
+
+3. STRUCTURE THE CONTENT INTO MULTIPLE SLIDES AS FOLLOWS:
+
+   - Slide 1: Definition
+     Title the slide "Definition". Clearly define the topic or concept using the RESPONSE: `{response}` text.
+
+   - Slide 2: Explanation with Example
+     Title the slide "Explanation". Expand on the RESPONSE TEXT by:
+       • Breaking it into clear, concise bullet points
+       • Adding a real-life or illustrative example
+       • Ensuring the explanation is easy to understand
+
+   - Slides 3+: Images
+     Create one slide per image from the following:
+{image_block}
+     Each slide should display the image with a caption and optionally add bullet points.
+
+   - Second Last Slide: Follow-Up Questions
+     Title the slide "Follow-Up Questions". Generate 3-5 thoughtful questions based on the topic.
+
+   - Final Slide: References
+     Title the slide "References". Include all links below in bullet points:
+{chr(10).join(reference_links)}
+
+4. Wrap every `\\includegraphics` command inside an `\\IfFileExists` check.
+
+5. Return ONLY the full LaTeX code, starting with `\\documentclass` and ending with `\\end{{document}}`. DO NOT INCLUDE ANY EXPLANATION OUTSIDE THE LATEX CODE.
+
+6. Do not include more than 2 images.
+
+7. Do not include more than 5 slides.
+"""
+
+        # Call Deepseek chat model with the prompt
+        latex_code = call_deepseek_chat(deepseek_prompt)
+        latex_code = clean_latex_content(latex_code)
+        print(latex_code)
+        # Save LaTeX code to file (cleaned and wrapped)
+        file_id = uuid.uuid4().hex
+        tex_file = f"slide_{file_id}.tex"
+        base_filename = f"slide_{file_id}"
+        with open(tex_file, "w") as f:
+            f.write(latex_code)
+
+        subprocess.run(["pdflatex", "--shell-escape", tex_file], check=True)
+
+        # Return PDF path
+        cleanup_generated_files(base_filename=base_filename,
+                                image_filenames=image_filenames)
+        pdf_path = tex_file.replace(".tex", ".pdf")
+        if not os.path.exists(pdf_path):
+            raise HTTPException(
+                status_code=500, detail="PDF generation failed")
+
+        return FileResponse(
+            path=pdf_path,
+            filename=os.path.basename(pdf_path),
+            media_type="application/pdf"
+        )
 
     except subprocess.CalledProcessError as e:
         raise HTTPException(
