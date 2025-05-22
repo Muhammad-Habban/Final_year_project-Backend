@@ -28,8 +28,8 @@ This is a FastAPI-based backend application that provides AI-powered chat functi
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd <repository-name>
+git clone https://github.com/Muhammad-Habban/Final_year_project-Backend
+cd https://github.com/Muhammad-Habban/Final_year_project-Backend
 ```
 
 2. Create and activate a virtual environment:
