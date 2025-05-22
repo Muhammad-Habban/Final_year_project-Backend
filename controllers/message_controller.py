@@ -647,8 +647,11 @@ async def generate_beamer_slide(
         # Search for relevant images
         base_url = str(
             request.base_url) if request else "http://localhost:8000/"
+
+        # summarize the response
+        summary = summarize_text(response, 25, 10)
         async with httpx.AsyncClient() as client:
-            img_result = await client.post(f"{base_url}search-with-images", params={"query": text})
+            img_result = await client.post(f"{base_url}search-with-images", params={"query": summary})
         if img_result.status_code != 200:
             raise HTTPException(status_code=500, detail="Image search failed")
         images_data = img_result.json()
@@ -664,7 +667,7 @@ async def generate_beamer_slide(
             for img in result.get("images", []):
                 img_url = img.get("image_url", "")
                 ext = img_url.split(".")[-1].split("?")[0]
-                if ext == "jpg" or ext == "jpeg":
+                if ext == "jpg":
                     filename = f"image{img_counter}.{ext}"
                     download_cmds.append(f"curl -o {filename} {img_url}")
                     include_lines.append(
@@ -686,25 +689,54 @@ async def generate_beamer_slide(
         openai_prompt = f"""
 GENERATE CORRECT SYNTAX FOR A LATEX BEAMER DOCUMENT THAT:
 
-- Includes the following text in a well-formatted slide(s):
-SLIDE 1 AND 2:
-{response}
-EXPAND ON THIS RESPONSE IF NECESSARY, CREATE BEAUTIFULL BULLET POINTS AND EXPLAIN IT
-SLIDE 3 AND 4:
-- Adds these images at appropriate places, with captions, using the local filenames below:
-{image_block}
-DO ADD A CAPTION TO EACH IMAGE IF YOU CAN, AND ADD MORE SLIDES IF NEEDED TO COVER ALL THE IMAGES
-SLIDE 5:
-ADD THE FOLLOWING REFERAL LINK
-{reference_links}
+1. Uses the `Madrid` theme and creates a visually appealing, well-structured Beamer presentation.
 
-- Starts the LaTeX code with these commands to download images dynamically:
+2. Starts with the following write18 block to enable dynamic image download:
 {write18_block}
 
-Return ONLY the complete LaTeX code, starting with \\documentclass and ending with \\end{{document}}.
-IMPORTANT: ONLY GENERATE LATEX CODE IN RESPONSE, DO NOT SAY ANYTHING ELSE
+3. STRUCTURE THE CONTENT INTO MULTIPLE SLIDES AS FOLLOWS:
 
-IMPORTANT: wrap every \\includegraphics in a \\IfFileExists check
+   - **Slide 1: Definition**
+     Title the slide "Definition". Clearly define the topic or concept using the `{response}` text.
+
+   - **Slide 2: Explanation with Example**
+     Title the slide "Explanation". Expand on the `{response}` by:
+       • Breaking it into clear, concise bullet points
+       • Adding a real-life or illustrative example
+       • Ensuring the explanation is easy to understand
+
+   - **Slides 3+: Images**
+     Create one slide per image from `{image_block}`. Each slide should:
+       • Display the image using `\\IfFileExists`
+       • Include a meaningful caption using the filename or context
+       • Optionally add bullet points or explanation about the image
+
+   - **Second Last Slide: Follow-Up Questions**
+     Title the slide "Follow-Up Questions". Generate 3-5 thoughtful questions based on the topic that can lead to further discussion or exploration.
+
+   - **Final Slide: References**
+     Title the slide "References". Include all items from `{reference_links}` in bullet point format. Make sure they are formatted cleanly and are easy to read.
+
+4. Wrap every `\\includegraphics` command inside an `\\IfFileExists` check to prevent errors if the image is missing.
+
+5. Return ONLY the full LaTeX code, starting with `\\documentclass` and ending with `\\end{{document}}`. DO NOT INCLUDE ANY EXPLANATION OUTSIDE THE LATEX CODE.
+
+6. Ensure all slides follow a consistent color scheme and pleasant formatting for readability.
+
+7. do not include more than 2 images.
+
+8. do not include more than 5 slides.
+
+NOTE: Use only built-in packages or standard packages (graphicx, xcolor, etc.). DO NOT include external dependencies unless absolutely necessary.
+
+INPUTS:
+- `{response}`: The explanation or initial answer
+- `{image_block}`: List of image filenames (e.g., image1.png, graph2.jpg, etc.)
+- `{reference_links}`: List of links or citations
+- `{write18_block}`: LaTeX commands for dynamic image download
+
+THIS PROMPT MUST BE FOLLOWED STRICTLY TO CREATE MULTIPLE SLIDES WITH STRUCTURED CONTENT IN A PROFESSIONAL BEAMER FORMAT.
+
 """
 
         # 5. Call OpenAI ChatCompletion
@@ -719,6 +751,7 @@ IMPORTANT: wrap every \\includegraphics in a \\IfFileExists check
         )
         latex_code = completion.choices[0].message.content.strip()
         latex_code = extract_latex_code(latex_code)
+        print(latex_code)
         # Write and compile LaTeX
         file_id = uuid.uuid4().hex
         tex_file = f"slide_{file_id}.tex"
